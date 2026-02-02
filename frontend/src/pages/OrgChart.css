@@ -1,0 +1,420 @@
+/* OrgChart.css - Top-Down Horizontal Layout */
+
+.tree-container {
+    padding: 50px;
+    width: 100%;
+    overflow: auto;
+    display: flex;
+    justify-content: center;
+}
+
+.tree {
+    white-space: nowrap;
+    min-width: min-content;
+}
+
+.tree ul {
+    display: flex;
+    padding-top: 20px;
+    position: relative;
+    transition: all 0.5s;
+    justify-content: center;
+}
+
+.tree ul.hidden {
+    display: none !important;
+}
+
+.tree li {
+    float: left;
+    text-align: center;
+    list-style-type: none;
+    position: relative;
+    padding: 20px 10px 0 10px;
+    transition: all 0.5s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Connectors */
+/* We will use ::before and ::after to draw the connector lines */
+
+/* 1. Downward line from parent to siblings bar */
+.tree ul::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    border-left: 2px solid #cbd5e1;
+    width: 0;
+    height: 20px;
+    transform: translateX(-50%);
+}
+
+/* Root UL doesn't need a line above it */
+.tree>ul::before {
+    display: none;
+}
+
+/* 2. Horizontal bar above children */
+.tree li::before,
+.tree li::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 50%;
+    border-top: 2px solid #cbd5e1;
+    width: 50%;
+    height: 20px;
+}
+
+.tree li::after {
+    right: auto;
+    left: 50%;
+    border-left: 2px solid #cbd5e1;
+}
+
+/* 3. Remove connectors for only child or first/last elements to clean up the bar */
+
+/* Only child: straight line down */
+.tree li:only-child::after,
+.tree li:only-child::before {
+    display: none;
+}
+
+.tree li:only-child {
+    padding-top: 0;
+}
+
+/* First child: remove left connector */
+.tree li:first-child::before {
+    border: 0 none;
+}
+
+/* Last child: remove right connector */
+.tree li:last-child::after {
+    border: 0 none;
+}
+
+/* Add back the vertical line for the last child */
+.tree li:last-child::before {
+    border-right: 2px solid #cbd5e1;
+    border-radius: 0 5px 0 0;
+}
+
+/* Add back the vertical line for the first child */
+.tree li:first-child::after {
+    border-radius: 5px 0 0 0;
+}
+
+/* Node Styling */
+.tree-node {
+    background: white;
+    border: 1px solid #e2e8f0;
+    padding: 12px 20px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    /* Vertical align icon and text */
+    align-items: center;
+    gap: 8px;
+    z-index: 10;
+    position: relative;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    min-width: 180px;
+    cursor: pointer;
+}
+
+.tree-node:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+    border-color: #3b82f6;
+}
+
+.tree-node.active {
+    background-color: #eff6ff;
+    border-color: #3b82f6;
+    transform: scale(1.05);
+}
+
+/* Specialized Node Styles */
+.node-root {
+    background: #1e293b;
+    color: white;
+    padding: 16px 32px;
+    border: none;
+    min-width: 240px;
+}
+
+.node-dept {
+    border-top: 4px solid #3b82f6;
+    /* Top border for vertical flow */
+}
+
+.node-spoc {
+    border-top: 4px solid #6366f1;
+}
+
+.node-bot {
+    border-top: 4px solid #10b981;
+    flex-direction: row;
+    /* Keep bots horizontal internally if preferred, or vertical */
+    text-align: left;
+    align-items: flex-start;
+    padding: 10px;
+    min-width: 220px;
+}
+
+.node-bot.inactive {
+    border-top-color: #f43f5e;
+    /* Rose-500 */
+    background: #fff1f2;
+    /* Rose-50 */
+}
+
+.node-bot.inactive:hover {
+    border-color: #f43f5e;
+}
+
+/* Vertical Stacking for Bots specific override */
+/* If we want bots to be a vertical list under the SPOC: */
+.tree li.bot-leaf-wrapper {
+    display: block;
+    /* Break out of flex row? No, we want to stack them. */
+    padding: 5px 0;
+}
+
+.bot-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 20px;
+    align-items: center;
+    position: relative;
+}
+
+/* Connectors for Bot List (Vertical) */
+.bot-list-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    border-left: 2px solid #cbd5e1;
+    width: 0;
+    height: 20px;
+    transform: translateX(-50%);
+}
+
+/* Horizontal Tree Mode */
+.tree-horizontal ul {
+    flex-direction: column;
+    align-items: flex-start;
+    padding-left: 40px;
+    /* Space for the connector from parent */
+    padding-top: 0;
+    position: relative;
+    background: transparent;
+    /* Debug */
+}
+
+/* Connector from Parent Node to this Group */
+.tree-horizontal ul::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 40px;
+    /* Spans the padding */
+    border-top: 2px solid #cbd5e1;
+    height: 0;
+    border-left: none;
+    /* Override default */
+}
+
+.tree-horizontal li {
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 0 10px 0;
+    text-align: left;
+    position: relative;
+}
+
+/* Common Vertical Spine for all items */
+.tree-horizontal li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    width: 2px;
+    background-color: #cbd5e1;
+    height: 100%;
+    top: 0;
+    border: none;
+}
+
+/* Common Horizontal Strut to Node */
+.tree-horizontal li::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 20px;
+    /* Distance from spine to node */
+    height: 2px;
+    background-color: #cbd5e1;
+    border: none;
+}
+
+/* Apply margin to the node to offset it from the spine */
+.tree-horizontal .tree-node {
+    margin-left: 20px;
+}
+
+/* First Child: Curve from Bottom (Spine) to Right (Node) */
+.tree-horizontal li:first-child::before {
+    top: 50%;
+    height: 50%;
+    /* Only bottom half */
+    width: 20px;
+    /* Width for the curve */
+    background: transparent;
+    border-left: 2px solid #cbd5e1;
+    border-top: 2px solid #cbd5e1;
+    border-top-left-radius: 12px;
+}
+
+.tree-horizontal li:first-child::after {
+    display: none;
+    /* Replaced by the border-top of ::before */
+}
+
+/* Last Child: Curve from Top (Spine) to Right (Node) */
+.tree-horizontal li:last-child::before {
+    top: 0;
+    height: 50%;
+    /* Only top half */
+    width: 20px;
+    background: transparent;
+    border-left: 2px solid #cbd5e1;
+    border-bottom: 2px solid #cbd5e1;
+    border-bottom-left-radius: 12px;
+}
+
+.tree-horizontal li:last-child::after {
+    display: none;
+    /* Replaced by the border-bottom of ::before */
+}
+
+/* Only Child: Straight horizontal line */
+.tree-horizontal li:only-child::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 20px;
+    height: 2px;
+    background-color: #cbd5e1;
+    border: none;
+    border-radius: 0;
+}
+
+.tree-horizontal li:only-child::after {
+    display: none;
+}
+
+
+/* --- Bot List Connector Support (for divs inside .bot-list-container) --- */
+.tree-horizontal .bot-list-container {
+    flex-direction: column;
+    padding-left: 40px;
+    position: relative;
+    border-left: none;
+    /* Reset vertical mode styles if any */
+}
+
+.tree-horizontal .bot-list-container::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 40px;
+    border-top: 2px solid #cbd5e1;
+    height: 0;
+    border-left: none;
+}
+
+.tree-horizontal .bot-list-container>div {
+    position: relative;
+    margin-left: 20px;
+    /* Offset for connectors */
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+/* Bot Vertical Spine */
+.tree-horizontal .bot-list-container>div::before {
+    content: '';
+    position: absolute;
+    left: -20px;
+    /* Pull back to spine */
+    width: 2px;
+    background-color: #cbd5e1;
+    height: calc(100% + 20px);
+    /* Extend to cover margins */
+    top: -10px;
+    border: none;
+}
+
+/* Bot Horizontal Strut */
+.tree-horizontal .bot-list-container>div::after {
+    content: '';
+    position: absolute;
+    left: -20px;
+    top: 50%;
+    width: 20px;
+    height: 2px;
+    background-color: #cbd5e1;
+}
+
+/* Bot First Child */
+.tree-horizontal .bot-list-container>div:first-child::before {
+    top: 50%;
+    height: 50%;
+    width: 20px;
+    background: transparent;
+    border-left: 2px solid #cbd5e1;
+    border-top: 2px solid #cbd5e1;
+    border-top-left-radius: 12px;
+}
+
+.tree-horizontal .bot-list-container>div:first-child::after {
+    display: none;
+}
+
+/* Bot Last Child */
+.tree-horizontal .bot-list-container>div:last-child::before {
+    top: -10px;
+    /* Start from top margin */
+    height: calc(50% + 10px);
+    /* Go to middle */
+    width: 20px;
+    background: transparent;
+    border-left: 2px solid #cbd5e1;
+    border-bottom: 2px solid #cbd5e1;
+    border-bottom-left-radius: 12px;
+}
+
+.tree-horizontal .bot-list-container>div:last-child::after {
+    display: none;
+}
+
+/* Bot Only Child */
+.tree-horizontal .bot-list-container>div:only-child::before {
+    background: #cbd5e1;
+    height: 2px;
+    width: 20px;
+    top: 50%;
+    border-radius: 0;
+    border: none;
+}

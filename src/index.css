@@ -1,0 +1,325 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+@font-face {
+  font-family: 'Adani';
+  src: url('./fonts/adani.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+:root {
+  /* High-contrast color scheme */
+  --background: #ffffff;
+  --foreground: #000000;
+  
+  /* Vibrant color palette */
+  --primary: 221 83% 50%; /* Strong blue */
+  --primary-foreground: 0 0% 100%;
+  
+  --secondary: 270 70% 50%; /* Purple */
+  --secondary-foreground: 0 0% 100%;
+  
+  --accent: 160 70% 40%; /* Teal */
+  --accent-foreground: 0 0% 100%;
+  
+  --destructive: 0 80% 50%; /* Strong red */
+  --destructive-foreground: 0 0% 100%;
+  
+  --success: 150 70% 40%; /* Green */
+  --success-foreground: 0 0% 100%;
+  
+  --warning: 30 80% 50%; /* Amber */
+  --warning-foreground: 0 0% 0%;
+  
+  --info: 200 80% 50%; /* Light blue */
+  --info-foreground: 0 0% 100%;
+  
+  --muted: 0 0% 90%;
+  --muted-foreground: 0 0% 50%;
+  
+  --border: 0 0% 85%;
+  --input: 0 0% 85%;
+  --ring: 221 83% 50%;
+  
+  --radius: 0.5rem;
+  
+  /* New color palette */
+  --honolulu-blue: 202 88% 37%; /* #0B74B0 */
+  --dark-lavender: 272 37% 45%; /* #75479C */
+  --x11-maroon: 342 54% 48%; /* #BD3861 */
+}
+
+/* Global styles for high contrast */
+body {
+  background-color: #ffffff;
+  color: #000000;
+  font-family: 'Adani', sans-serif;
+}
+
+/* Ensure all text has good contrast */
+h1, h2, h3, h4, h5, h6, p, span, div {
+  color: #000000;
+}
+
+/* Card styles with high contrast */
+.card {
+  background-color: #ffffff;
+  border: 2px solid #000000;
+}
+
+/* Button styles with high contrast */
+.btn-primary {
+  background-color: hsl(221, 83%, 50%);
+  color: white;
+  border: 2px solid hsl(221, 83%, 50%);
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: #000000;
+  border: 2px solid #000000;
+}
+
+/* Focus styles for accessibility */
+:focus {
+  outline: 2px solid hsl(221, 83%, 50%);
+  outline-offset: 2px;
+}
+
+/* Selection styles */
+::selection {
+  background-color: hsl(221, 83%, 50%);
+  color: white;
+}
+
+/* Modern Dashboard Design System - All colors MUST be HSL */
+
+@font-face {
+  font-family: 'Adani';
+  src: url('./fonts/adani.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    /* Light Theme Dashboard Background - Pure white */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%; /* Pure black text for maximum contrast */
+
+    /* Sidebar Colors - Light Theme */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 0%;
+    --sidebar-accent: 220 80% 50%; /* Strong blue for contrast */
+    --sidebar-accent-hover: 220 85% 55%;
+
+    /* Card System - Light theme */
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --card-glass: 0 0% 100%;
+    --card-glass-foreground: 0 0% 0%;
+
+    /* Chart Colors - High contrast palette */
+    --chart-primary: 220 80% 50%; /* Strong blue */
+    --chart-secondary: 280 80% 50%; /* Vibrant purple */
+    --chart-accent: 180 80% 40%; /* Teal */
+    --chart-success: 120 80% 40%; /* Green */
+    --chart-warning: 40 90% 50%; /* Amber */
+
+    /* Light Colors */
+    --main-color: #ffffff;
+    --card-color: rgba(255, 255, 255, 1);
+
+    /* Interactive Elements - High contrast */
+    --primary: 220 80% 50%; /* Strong blue */
+    --primary-foreground: 0 0% 100%; /* White text */
+    --secondary: 0 0% 95%;
+    --secondary-foreground: 0 0% 0%;
+
+    /* Light theme adjustments */
+    --muted: 0 0% 90%;
+    --muted-foreground: 0 0% 30%;
+
+    --accent: 280 80% 50%; /* Vibrant purple */
+    --accent-foreground: 0 0% 100%; /* White text */
+
+    --destructive: 0 80% 50%; /* Strong red */
+    --destructive-foreground: 0 0% 100%; /* White text */
+
+    --border: 0 0% 85%;
+    --input: 0 0% 85%;
+    --ring: 220 80% 50%; /* Strong blue */
+
+    --radius: 0.75rem;
+    
+    /* New color palette in HSL format */
+    --honolulu-blue: 202 88% 37%; /* #0B74B0 */
+    --dark-lavender: 272 37% 45%; /* #75479C */
+    --x11-maroon: 342 54% 48%; /* #BD3861 */
+  }
+
+  /* Light theme is default - remove dark mode enforcement */
+  html {
+    color-scheme: light;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background: #ffffff;
+    min-height: 100vh;
+    /* Improve text rendering on different devices */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Ensure proper scaling on mobile devices */
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--accent));
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  /* Glassmorphism card effect */
+  .card-glass {
+    @apply backdrop-blur-sm border border-white/20 shadow-xl;
+    background: rgba(255, 255, 255, 0.9);
+  }
+
+  /* Chart animations */
+  .chart-animate {
+    @apply transition-all duration-700 ease-in-out;
+  }
+
+  /* ECG Monitor styles with light theme and custom color palette */
+  .ecg-grid {
+    background-image: 
+      repeating-linear-gradient(rgba(0, 0, 0, 0.1) 0px, rgba(0, 0, 0, 0.1) 1px, transparent 1px, transparent 20px),
+      repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.1) 0px, rgba(0, 0, 0, 0.1) 1px, transparent 1px, transparent 20px);
+  }
+
+  .ecg-major-grid {
+    background-image: 
+      repeating-linear-gradient(rgba(0, 0, 0, 0.2) 0px, rgba(0, 0, 0, 0.2) 1px, transparent 1px, transparent 100px),
+      repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.2) 0px, rgba(0, 0, 0, 0.2) 1px, transparent 1px, transparent 100px);
+  }
+
+  /* Monitor glow effects with light theme */
+  .monitor-glow {
+    box-shadow: 
+      0 0 20px rgba(0, 0, 0, 0.1),
+      inset 0 0 20px rgba(255, 255, 255, 0.8);
+  }
+
+  .pulse-animation {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 0.7;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+  }
+
+  /* Scanning line effect */
+  .scan-line {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scan-line::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.1);
+    animation: scan 3s linear infinite;
+  }
+
+  @keyframes scan {
+    0% {
+      left: -100%;
+    }
+    100% {
+      left: 100%;
+    }
+  }
+
+  /* Data flow animation with light theme */
+  .data-flow {
+    background: repeating-linear-gradient(
+      45deg,
+      transparent 0px,
+      transparent 5px,
+      rgba(0, 0, 0, 0.1) 5px,
+      rgba(0, 0, 0, 0.1) 10px,
+      transparent 10px,
+      transparent 15px,
+      rgba(0, 0, 0, 0.2) 15px,
+      rgba(0, 0, 0, 0.2) 20px
+    );
+    animation: flow 2s linear infinite;
+  }
+
+  @keyframes flow {
+    0% {
+      background-position: 0 0;
+    }
+    100% {
+      background-position: 20px 20px;
+    }
+  }
+  
+  /* Responsive improvements for better mobile experience */
+  @media (max-width: 640px) {
+    /* Adjust font sizes for small screens */
+    h1 {
+      font-size: 1.5rem;
+    }
+    
+    h2 {
+      font-size: 1.25rem;
+    }
+    
+    /* Ensure proper spacing on mobile */
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+  
+  /* Large screen optimizations */
+  @media (min-width: 1280px) {
+    /* Adjust maximum widths for large screens */
+    .container {
+      max-width: 1440px;
+    }
+  }
+}

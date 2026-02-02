@@ -1,0 +1,374 @@
+{
+  "Q1": [
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "MINUTES OF THE ", "is_placeholder": false},
+        {"text": "[No. of Meeting]", "is_placeholder": true},
+        {"text": " ", "is_placeholder": false},
+        {"text": "[Type of Meeting]", "is_placeholder": true},
+        {"text": " BOARD OF DIRECTORS MEETING OF ", "is_placeholder": false},
+        {"text": "[Name of Company]", "is_placeholder": true},
+        {"text": " HELD ON ", "is_placeholder": false},
+        {"text": "[Day of Meeting]", "is_placeholder": true},
+        {"text": ", THE ", "is_placeholder": false},
+        {"text": "[Date of Meeting]", "is_placeholder": true},
+        {"text": " COMMENCED AT ", "is_placeholder": false},
+        {"text": "[Time: COMMENCED AT]", "is_placeholder": true},
+        {"text": " AND CONCLUDED AT ", "is_placeholder": false},
+        {"text": "[Time: CONCLUDED AT]", "is_placeholder": true},
+        {"text": ", AT ", "is_placeholder": false},
+        {"text": "[Place of Meeting]", "is_placeholder": true}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "The following Directors were present:", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "In ATTENDANCE: – ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "Chairman ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "Mr. ", "is_placeholder": false},
+        {"text": "[Manual]", "is_placeholder": true},
+        {"text": " occupied the Chair and the meeting commenced its business.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "LEAVE OF ABSENCE: ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "All directors being present, there is no requirement to grant leave of absence.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "QUORUM:", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "The Chairman assessed the quorum for commencement of the proceeding of the board Meeting of the Company. For this the attendance register was circulated among the members of the board for their signature in token of their presence. After that the Chairman declared that a valid quorum is present in the meeting and commenced the proceedings.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "TO CONFIRM THE MINUTES OF THE PREVIOUS BOARD MEETING.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "The Chairman placed on table the minutes of the previous meeting of Board of Directors dated ", "is_placeholder": false},
+        {"text": "[Auto]", "is_placeholder": true},
+        {"text": " which were prepared within the stipulated time period. The same were read, confirmed and approved by the Board and signed by the Chairman of the meeting.    ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "table",
+      "segments": [
+        {"text": "[from MCA]", "is_placeholder": true}
+      ]
+    }
+  ],
+  "Q2": [
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "MINUTES OF THE ", "is_placeholder": false},
+        {"text": "[No. of Meeting]", "is_placeholder": true},
+        {"text": " ", "is_placeholder": false},
+        {"text": "[Type of Meeting]", "is_placeholder": true},
+        {"text": " BOARD OF DIRECTORS MEETING OF ", "is_placeholder": false},
+        {"text": "[Name of Company]", "is_placeholder": true},
+        {"text": " HELD ON ", "is_placeholder": false},
+        {"text": "[Day of Meeting]", "is_placeholder": true},
+        {"text": ", THE ", "is_placeholder": false},
+        {"text": "[Date of Meeting]", "is_placeholder": true},
+        {"text": " COMMENCED AT ", "is_placeholder": false},
+        {"text": "[Time: COMMENCED AT]", "is_placeholder": true},
+        {"text": " AND CONCLUDED AT ", "is_placeholder": false},
+        {"text": "[Time: CONCLUDED AT]", "is_placeholder": true},
+        {"text": ", AT ", "is_placeholder": false},
+        {"text": "[Place of Meeting]", "is_placeholder": true}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "The following Directors were present:", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "In ATTENDANCE: – ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "Chairman ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "Mr. ", "is_placeholder": false},
+        {"text": "[Manual]", "is_placeholder": true},
+        {"text": " occupied the Chair and the meeting commenced its business.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "LEAVE OF ABSENCE: ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "All directors being present, there is no requirement to grant leave of absence.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "QUORUM:", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "The Chairman assessed the quorum for commencement of the proceeding of the board Meeting of the Company. For this the attendance register was circulated among the members of the board for their signature in token of their presence. After that the Chairman declared that a valid quorum is present in the meeting and commenced the proceedings.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "TO CONFIRM THE MINUTES OF THE PREVIOUS BOARD MEETING.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "The Chairman placed on table the minutes of the previous meeting of Board of Directors dated ", "is_placeholder": false},
+        {"text": "[Auto]", "is_placeholder": true},
+        {"text": " which were prepared within the stipulated time period. The same were read, confirmed and approved by the Board and signed by the Chairman of the meeting.    ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "table",
+      "segments": [
+        {"text": "[from MCA]", "is_placeholder": true}
+      ]
+    }
+  ],
+  "Q3": [
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "MINUTES OF THE ", "is_placeholder": false},
+        {"text": "[No. of Meeting]", "is_placeholder": true},
+        {"text": " ", "is_placeholder": false},
+        {"text": "[Type of Meeting]", "is_placeholder": true},
+        {"text": " BOARD OF DIRECTORS MEETING OF ", "is_placeholder": false},
+        {"text": "[Name of Company]", "is_placeholder": true},
+        {"text": " HELD ON ", "is_placeholder": false},
+        {"text": "[Day of Meeting]", "is_placeholder": true},
+        {"text": ", THE ", "is_placeholder": false},
+        {"text": "[Date of Meeting]", "is_placeholder": true},
+        {"text": " COMMENCED AT ", "is_placeholder": false},
+        {"text": "[Time: COMMENCED AT]", "is_placeholder": true},
+        {"text": " AND CONCLUDED AT ", "is_placeholder": false},
+        {"text": "[Time: CONCLUDED AT]", "is_placeholder": true},
+        {"text": ", AT ", "is_placeholder": false},
+        {"text": "[Place of Meeting]", "is_placeholder": true}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "The following Directors were present:", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "In ATTENDANCE: – ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "Chairman ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "Mr. ", "is_placeholder": false},
+        {"text": "[Manual]", "is_placeholder": true},
+        {"text": " occupied the Chair and the meeting commenced its business.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "LEAVE OF ABSENCE: ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "All directors being present, there is no requirement to grant leave of absence.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "QUORUM:", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "The Chairman assessed the quorum for commencement of the proceeding of the board Meeting of the Company. For this the attendance register was circulated among the members of the board for their signature in token of their presence. After that the Chairman declared that a valid quorum is present in the meeting and commenced the proceedings.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "TO CONFIRM THE MINUTES OF THE PREVIOUS BOARD MEETING.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "The Chairman placed on table the minutes of the previous meeting of Board of Directors dated ", "is_placeholder": false},
+        {"text": "[Auto]", "is_placeholder": true},
+        {"text": " which were prepared within the stipulated time period. The same were read, confirmed and approved by the Board and signed by the Chairman of the meeting.    ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "table",
+      "segments": [
+        {"text": "[from MCA]", "is_placeholder": true}
+      ]
+    }
+  ],
+  "Q4": [
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "MINUTES OF THE ", "is_placeholder": false},
+        {"text": "[No. of Meeting]", "is_placeholder": true},
+        {"text": " ", "is_placeholder": false},
+        {"text": "[Type of Meeting]", "is_placeholder": true},
+        {"text": " BOARD OF DIRECTORS MEETING OF ", "is_placeholder": false},
+        {"text": "[Name of Company]", "is_placeholder": true},
+        {"text": " HELD ON ", "is_placeholder": false},
+        {"text": "[Day of Meeting]", "is_placeholder": true},
+        {"text": ", THE ", "is_placeholder": false},
+        {"text": "[Date of Meeting]", "is_placeholder": true},
+        {"text": " COMMENCED AT ", "is_placeholder": false},
+        {"text": "[Time: COMMENCED AT]", "is_placeholder": true},
+        {"text": " AND CONCLUDED AT ", "is_placeholder": false},
+        {"text": "[Time: CONCLUDED AT]", "is_placeholder": true},
+        {"text": ", AT ", "is_placeholder": false},
+        {"text": "[Place of Meeting]", "is_placeholder": true}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "The following Directors were present:", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "In ATTENDANCE: – ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "Chairman ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "Mr. ", "is_placeholder": false},
+        {"text": "[Manual]", "is_placeholder": true},
+        {"text": " occupied the Chair and the meeting commenced its business.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "LEAVE OF ABSENCE: ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "All directors being present, there is no requirement to grant leave of absence.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "QUORUM:", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "The Chairman assessed the quorum for commencement of the proceeding of the board Meeting of the Company. For this the attendance register was circulated among the members of the board for their signature in token of their presence. After that the Chairman declared that a valid quorum is present in the meeting and commenced the proceedings.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "TO CONFIRM THE MINUTES OF THE PREVIOUS BOARD MEETING.", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "paragraph",
+      "segments": [
+        {"text": "The Chairman placed on table the minutes of the previous meeting of Board of Directors dated ", "is_placeholder": false},
+        {"text": "[Auto]", "is_placeholder": true},
+        {"text": " which were prepared within the stipulated time period. The same were read, confirmed and approved by the Board and signed by the Chairman of the meeting.    ", "is_placeholder": false}
+      ]
+    },
+    {
+      "type": "table",
+      "segments": [
+        {"text": "[from MCA]", "is_placeholder": true}
+      ]
+    }
+  ]
+}
