@@ -4,8 +4,9 @@ from sqlalchemy import func
 from datetime import datetime
 
 from database import get_db
-from models import Bot, Department, SPOC, BotRun
+from models import Bot, Department, SPOC, BotRun, FileLog
 from schemas import OrgSummary
+from utils import is_bot_active
 
 router = APIRouter(prefix="/api", tags=["summary"])
 
@@ -18,9 +19,9 @@ def get_org_summary(db: Session = Depends(get_db)):
     total_bots = db.query(func.count(Bot.id)).scalar() or 0
     
     # Status counts
-    deployed_bots = db.query(func.count(Bot.id)).filter(
-        Bot.status.in_(['Deployed', 'deployed', 'Live', 'live'])
-    ).scalar() or 0
+    # Status counts - Robust check via utils
+    all_bots = db.query(Bot).all()
+    deployed_bots = sum(1 for b in all_bots if is_bot_active(b.status))
     
     # Get today's date for run stats
     today = datetime.now().strftime('%Y-%m-%d')
@@ -50,6 +51,9 @@ def get_org_summary(db: Session = Depends(get_db)):
     # Total hours saved
     total_hours_saved = db.query(func.sum(Bot.hours_saved_monthly)).scalar() or 0
     
+    # Total realized savings
+    total_realized_savings = db.query(func.sum(FileLog.hours_saved_estimate)).filter(FileLog.status != "Failed").scalar() or 0.0
+
     return OrgSummary(
         total_bots=total_bots,
         deployed_bots=deployed_bots,
@@ -59,6 +63,7 @@ def get_org_summary(db: Session = Depends(get_db)):
         total_departments=total_departments,
         total_spocs=total_spocs,
         total_hours_saved_monthly=float(total_hours_saved),
+        total_realized_savings=float(total_realized_savings),
         total_runs_today=total_runs_today,
         successful_runs_today=successful_runs_today,
         failed_runs_today=failed_runs_today

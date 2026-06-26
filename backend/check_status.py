@@ -2,19 +2,21 @@ from database import SessionLocal
 from models import Bot
 from sqlalchemy import func
 
-db = SessionLocal()
-statuses = db.query(Bot.status, func.count(Bot.status)).group_by(Bot.status).all()
+def check_statuses():
+    db = SessionLocal()
+    try:
+        # Get unique statuses and their counts
+        results = db.query(Bot.status, func.count(Bot.status)).group_by(Bot.status).all()
+        print("\n--- Bot Status Counts ---")
+        for status, count in results:
+            print(f"'{status}': {count}")
+            
+        # Also check for any bots with 'Unknown' status
+        unknowns = db.query(Bot).filter(Bot.status == 'Unknown').count()
+        print(f"\nBots with 'Unknown' status: {unknowns}")
+        
+    finally:
+        db.close()
 
-print("Distinct Statuses found in DB:")
-for status, count in statuses:
-    print(f"'{status}': {count}")
-    
-# Also check for 'BT' department specifically
-print("\nStatuses in 'Business Transformation' (or BT) department:")
-bots = db.query(Bot).all()
-for bot in bots:
-     dept_name = bot.department.name if bot.department else "No Dept"
-     if dept_name in ["BT", "Business Transformation"]:
-         print(f"Bot: {bot.bot_name}, Status: '{bot.status}'")
-
-db.close()
+if __name__ == "__main__":
+    check_statuses()

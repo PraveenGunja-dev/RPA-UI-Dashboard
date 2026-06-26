@@ -39,7 +39,10 @@ class Bot(Base):
     description = Column(Text)
     bu_name = Column(String(100))
     pdd_location = Column(String(500))  # PDD document URL/path
+    pdd_link = Column(String(1000))  # Clickable PDD link from Link column
     team = Column(String(200))  # Team responsible for the bot
+    use_case_no = Column(String(50))  # Use Case No (e.g., AUC001)
+    schedule_time = Column(String(200))  # Schedule Time IN Runner Machine
     created_at = Column(String(50))
     
     # New fields
@@ -51,6 +54,11 @@ class Bot(Base):
     bot_running_status = Column(String(100))
     last_run_status = Column(String(100))
     key_benefits = Column(Text)
+    
+    # New columns for calculation logic
+    frequency = Column(String(100))  # Daily, Monthly, On Demand, etc.
+    schedule_details = Column(String(200))  # Detailed schedule info
+    per_day_saving_hours = Column(Float, default=0)  # Per Day Saving hours from Excel
     
     department = relationship("Department", back_populates="bots")
     spoc = relationship("SPOC", back_populates="bots")
@@ -77,3 +85,29 @@ class VisitCount(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     count = Column(Integer, default=0)
+
+
+class FileLog(Base):
+    __tablename__ = "file_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String(255))
+    upload_date = Column(String(50)) # When it was processed (IST)
+    file_date = Column(String(50))   # The date extracted from file/content
+    processed_count = Column(Integer, default=0) # Total rows processed
+    unique_bots_count = Column(Integer, default=0) # Unique bots found
+    hours_saved_estimate = Column(Float, default=0.0)
+    file_path = Column(String(500)) # Path to archived file relative to backend
+    status = Column(String(50)) # Success, Partial_Success, Failed
+    error_message = Column(Text)
+
+
+class RegisteredUser(Base):
+    __tablename__ = "registered_users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    name = Column(String(255))
+    role = Column(String(50), default="User") # Admin, User
+    is_active = Column(Integer, default=1) # 1 for True, 0 for False
+    created_at = Column(DateTime)

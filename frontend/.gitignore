@@ -1,5 +1,8 @@
+
+# ==========================
 # Logs
-logs
+# ==========================
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,18 +10,134 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# ==========================
+# Node.js / Frontend
+# ==========================
+node_modules/
+dist/
+dist-ssr/
+build/
+coverage/
 
-# Editor directories and files
+npm-cache/
+.cache/
+.parcel-cache/
+
+# Vite
+.vite/
+
+# Next.js (if used)
+.next/
+out/
+
+# ==========================
+# Python / Backend
+# ==========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python build
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Pytest
+.pytest_cache/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# MyPy
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
+
+# Pyright
+.pyright/
+
+# ==========================
+# Environment Variables
+# ==========================
+.env
+.env.*
+!.env.example
+
+# ==========================
+# Database
+# ==========================
+*.db
+*.sqlite
+*.sqlite3
+
+# PostgreSQL data
+postgres_data/
+
+# ==========================
+# Docker
+# ==========================
+docker-compose.override.yml
+*.pid
+
+# ==========================
+# IDEs
+# ==========================
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
+
+# ==========================
+# OS Files
+# ==========================
 .DS_Store
+Thumbs.db
+Desktop.ini
+
+# ==========================
+# Windows
+# ==========================
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# ==========================
+# Temporary Files
+# ==========================
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+
+# ==========================
+# Misc
+# ==========================

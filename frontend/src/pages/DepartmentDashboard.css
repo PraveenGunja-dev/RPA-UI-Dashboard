@@ -5,7 +5,7 @@
     --primary-maroon: #BD3861;
     --success-green: #36B37E;
     --warning-orange: #FFAB00;
-    --error-red: #FF5630;
+    --error-pink: #ec4899;
     --light-bg: #f8f9fa;
     --white: #ffffff;
     --border-light: #e9ecef;
@@ -393,8 +393,8 @@
 }
 
 .badge-error {
-    background: rgba(255, 86, 48, 0.15);
-    color: #c93d21;
+    background: rgba(236, 72, 153, 0.15);
+    color: #be185d;
 }
 
 .badge-neutral {
@@ -608,5 +608,11 @@
 
     .modal-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (min-width: 768px) {
+    .mobile-only-header {
+        display: none !important;
     }
 }

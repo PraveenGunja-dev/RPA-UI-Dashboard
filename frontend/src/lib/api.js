@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+// Use Vite's BASE_URL (set in config) or default to /
+const VITE_BASE = import.meta.env.BASE_URL || '/';
+const API_BASE_URL = VITE_BASE.endsWith('/') ? `${VITE_BASE}api` : `${VITE_BASE}/api`;
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -49,5 +51,11 @@ export const uploadDailyReport = (file, reportDate = null) => {
 // Visit Counter
 export const getVisitCount = () => api.get('/visits/count');
 export const incrementVisitCount = () => api.post('/visits/increment');
+
+// Integration
+export const syncSharePoint = () => api.post('/integration/sync-sharepoint');
+export const getDailyStats = () => api.get('/integration/daily-stats');
+export const getFteTrend = (deptId = null, cumulative = false) => api.get('/integration/fte-trend', { params: { department_id: deptId, cumulative } });
+export const getDailyTrend = (deptId = null) => api.get('/integration/daily-trend', { params: { department_id: deptId } });
 
 export default api;

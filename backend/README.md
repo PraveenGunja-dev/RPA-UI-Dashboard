@@ -6,5 +6,5 @@ FastAPI backend for the RPA Console application.
 
 ```bash
 pip install -r requirements.txt
-python -m uvicorn main:app --reload --port 8000
+python -m uvicorn main:app --cd  --port 3123
 ```
