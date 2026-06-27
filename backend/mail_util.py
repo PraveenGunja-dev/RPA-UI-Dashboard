@@ -30,7 +30,7 @@ def send_admin_notification(new_user_email, new_user_name):
     # Professional HTML Body
     body = f"""
     <html>
-    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <body style="font-family: 'Adani', Arial, sans-serif; line-height: 1.6; color: #333;">
         <div style="max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
             <div style="background-color: #0b74b0; color: white; padding: 20px; text-align: center;">
                 <h2 style="margin: 0;">New User Access Request</h2>
@@ -94,7 +94,7 @@ def send_new_bot_notification(admin_emails, bot, department_name, spoc_name):
     # Professional HTML Body
     body = f"""
     <html>
-    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <body style="font-family: 'Adani', Arial, sans-serif; line-height: 1.6; color: #333;">
         <div style="max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
             <div style="background-color: #0b74b0; color: white; padding: 20px; text-align: center;">
                 <h2 style="margin: 0;">New Bot Successfully Created</h2>
@@ -184,7 +184,7 @@ def send_weekly_summary_notification(admin_emails, active_count, new_count, inac
     # Professional HTML Body
     body = f"""
     <html>
-    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <body style="font-family: 'Adani', Arial, sans-serif; line-height: 1.6; color: #333;">
         <div style="max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
             <div style="background-color: #0b74b0; color: white; padding: 20px; text-align: center;">
                 <h2 style="margin: 0;">Weekly Bot Execution Summary</h2>
