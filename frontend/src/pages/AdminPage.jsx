@@ -58,7 +58,7 @@ const StatCard = ({ icon: Icon, label, value, color, trend }) => (
 );
 
 // Bot Form Modal
-const BotFormModal = ({ bot, onClose, onSave, departments, spocs }) => {
+const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }) => {
     // When editing, we need to find department_id and spoc_id from names if not provided
     const getInitialFormData = () => {
         if (!bot) {
@@ -134,21 +134,32 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs }) => {
                             <input
                                 type="text"
                                 value={formData.use_case_no || ''}
-                                onChange={(e) => setFormData({ ...formData, use_case_no: e.target.value })}
-                                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="e.g., AUC001"
+                                disabled
+                                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-gray-50 text-gray-500 cursor-not-allowed"
+                                placeholder="Auto-generated on save"
                             />
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-1">Co-Bot Name *</label>
                             <input
                                 type="text"
+                                list="bot-name-suggestions"
                                 value={formData.use_case_name || ''}
                                 onChange={(e) => setFormData({ ...formData, use_case_name: e.target.value })}
-                                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent ${allBots.some(b => b.use_case_name === formData.use_case_name && b.id !== bot?.id) ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
                                 placeholder="e.g., AUC001_StoreMIS"
                                 required
                             />
+                            <datalist id="bot-name-suggestions">
+                                {allBots.map(b => (
+                                    <option key={b.id} value={b.use_case_name} />
+                                ))}
+                            </datalist>
+                            {allBots.some(b => b.use_case_name === formData.use_case_name && b.id !== bot?.id) && (
+                                <p className="text-xs text-red-600 mt-1 flex items-center gap-1 font-medium">
+                                    <AlertTriangle size={12} /> A bot with this name already exists
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -403,13 +414,22 @@ const BotsSection = ({ bots, departments, spocs, onRefresh }) => {
                     <h2 className="text-2xl font-bold text-gray-900">Bot Management</h2>
                     <p className="text-gray-500">Manage all automation bots in the system</p>
                 </div>
-                <button
-                    onClick={() => { setEditingBot(null); setShowModal(true); }}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all"
-                >
-                    <Plus size={20} />
-                    Add New Bot
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => window.open(`${API_BASE_URL}/admin/export-bots`, '_blank')}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all shadow-sm"
+                    >
+                        <Download size={20} />
+                        Download Report
+                    </button>
+                    <button
+                        onClick={() => { setEditingBot(null); setShowModal(true); }}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all"
+                    >
+                        <Plus size={20} />
+                        Add New Bot
+                    </button>
+                </div>
             </div>
 
             {/* Search & Filter */}
@@ -549,6 +569,7 @@ const BotsSection = ({ bots, departments, spocs, onRefresh }) => {
                     onSave={handleSaveBot}
                     departments={departments}
                     spocs={spocs}
+                    allBots={bots}
                 />
             )}
         </div>
@@ -1449,12 +1470,124 @@ const FileUploadSection = ({ onRefresh }) => {
 
 
 
+// Activity Logs Section
+const ActivityLogsSection = ({ auditLogs, onRefresh }) => {
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+    
+    const totalPages = Math.ceil(auditLogs.length / itemsPerPage);
+    const paginatedLogs = auditLogs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+    const formatValue = (val) => {
+        if (!val) return '-';
+        try {
+            const parsed = JSON.parse(val);
+            return Object.entries(parsed).map(([k, v]) => `${k}: ${v}`).join(', ');
+        } catch(e) {
+            return val;
+        }
+    };
+
+    return (
+        <div className="space-y-6 h-full flex flex-col">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Activity Logs</h2>
+                    <p className="text-gray-500">View all admin actions and system events</p>
+                </div>
+                <button
+                    onClick={onRefresh}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition-colors"
+                >
+                    <RefreshCw size={18} />
+                    Refresh
+                </button>
+            </div>
+            
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 overflow-auto">
+                    <table className="w-full">
+                        <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                            <tr>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Timestamp</th>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Action</th>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Entity</th>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">User</th>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {paginatedLogs.map((log) => (
+                                <tr key={log.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4 text-sm text-gray-600">
+                                        {new Date(log.timestamp).toLocaleString('en-IN')}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`inline-flex px-2 py-1 rounded text-xs font-bold ${
+                                            log.action_type === 'CREATE' ? 'bg-emerald-100 text-emerald-700' :
+                                            log.action_type === 'DELETE' ? 'bg-pink-100 text-pink-700' :
+                                            'bg-blue-100 text-blue-700'
+                                        }`}>
+                                            {log.action_type}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                                        {log.entity_type} #{log.entity_id}
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">
+                                        {log.changed_by}
+                                    </td>
+                                    <td className="px-6 py-4 text-xs text-gray-500 max-w-xs truncate" title={log.new_value || log.old_value}>
+                                        {log.action_type === 'UPDATE' ? `Changed to: ${formatValue(log.new_value)}` : formatValue(log.new_value || log.old_value)}
+                                    </td>
+                                </tr>
+                            ))}
+                            {paginatedLogs.length === 0 && (
+                                <tr>
+                                    <td colSpan="5" className="px-6 py-10 text-center text-gray-500">
+                                        No activity logs found.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white relative z-20">
+                    <div className="text-sm text-gray-500">
+                        Showing <strong>{Math.min((currentPage - 1) * itemsPerPage + 1, auditLogs.length) || 0}</strong> to <strong>{Math.min(currentPage * itemsPerPage, auditLogs.length)}</strong> of <strong>{auditLogs.length}</strong> logs
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                            className="p-2 border border-gray-200 rounded-lg disabled:opacity-50 hover:bg-gray-50 text-gray-600 transition-colors disabled:cursor-not-allowed"
+                        >
+                            <ChevronLeft size={16} />
+                        </button>
+                        <span className="text-sm font-medium text-gray-700 min-w-[80px] text-center">
+                            Page {currentPage} of {Math.max(1, totalPages)}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            disabled={currentPage === totalPages || totalPages === 0}
+                            className="p-2 border border-gray-200 rounded-lg disabled:opacity-50 hover:bg-gray-50 text-gray-600 transition-colors disabled:cursor-not-allowed"
+                        >
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // Main Admin Page Component
 export default function AdminPage() {
     const navigate = useNavigate();
     const { logout } = useAuth();
     const [activeTab, setActiveTab] = useState('dashboard');
     const [logs, setLogs] = useState([]);
+    const [auditLogs, setAuditLogs] = useState([]);
     const [bots, setBots] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [spocs, setSpocs] = useState([]);
@@ -1514,8 +1647,9 @@ export default function AdminPage() {
     const fetchAllData = async () => {
         setLoading(true);
         try {
-            const [logsRes, botsRes, deptsRes, spocsRes, usersRes, statsRes] = await Promise.all([
+            const [logsRes, auditRes, botsRes, deptsRes, spocsRes, usersRes, statsRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/admin/logs`),
+                axios.get(`${API_BASE_URL}/admin/audit-logs`).catch(() => ({ data: [] })),
                 axios.get(`${API_BASE_URL}/bots`),
                 axios.get(`${API_BASE_URL}/departments`),
                 axios.get(`${API_BASE_URL}/admin/spocs`).catch(() => ({ data: [] })),
@@ -1524,6 +1658,7 @@ export default function AdminPage() {
             ]);
 
             setLogs(logsRes.data);
+            setAuditLogs(auditRes.data);
             setBots(botsRes.data);
             setDepartments(deptsRes.data);
             setSpocs(spocsRes.data);
@@ -1621,6 +1756,12 @@ export default function AdminPage() {
                         count={users.length}
                     />
                     <TabButton
+                        active={activeTab === 'audit'}
+                        onClick={() => { setActiveTab('audit'); setSidebarOpen(false); }}
+                        icon={Clock}
+                        label="Activity Logs"
+                    />
+                    <TabButton
                         active={activeTab === 'manual'}
                         onClick={() => { setActiveTab('manual'); setSidebarOpen(false); }}
                         icon={BookOpen}
@@ -1681,6 +1822,7 @@ export default function AdminPage() {
                                 />
                             )}
                             {activeTab === 'logs' && <FileLogsSection logs={logs} onRefresh={fetchAllData} />}
+                            {activeTab === 'audit' && <ActivityLogsSection auditLogs={auditLogs} onRefresh={fetchAllData} />}
                             {activeTab === 'upload' && <FileUploadSection onRefresh={fetchAllData} />}
                             {activeTab === 'users' && <UsersSection users={users} onRefresh={fetchAllData} />}
                             {activeTab === 'manual' && <UserManualSection />}

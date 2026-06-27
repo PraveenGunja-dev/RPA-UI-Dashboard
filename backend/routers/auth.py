@@ -172,6 +172,17 @@ async def callback(code: str, background_tasks: BackgroundTasks, state: str = No
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 
+def get_current_user_email(request: Request) -> str:
+    """Dependency to extract user email from auth token."""
+    token = request.cookies.get("auth_token")
+    if not token:
+        return "Unknown"
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        return payload.get("sub", "").lower().strip() or "Unknown"
+    except Exception:
+        return "Unknown"
+
 @router.get("/me")
 async def get_me(request: Request, db: Session = Depends(get_db)):
     # Add Cache-Control to prevent browser from caching old role status

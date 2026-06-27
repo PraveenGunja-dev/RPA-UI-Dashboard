@@ -111,3 +111,15 @@ class RegisteredUser(Base):
     role = Column(String(50), default="User") # Admin, User
     is_active = Column(Integer, default=1) # 1 for True, 0 for False
     created_at = Column(DateTime)
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String(100)) # e.g., "Bot", "User"
+    entity_id = Column(String(100))
+    action_type = Column(String(50)) # e.g., "CREATE", "UPDATE", "DELETE"
+    old_value = Column(Text, nullable=True) # JSON representation of previous state
+    new_value = Column(Text, nullable=True) # JSON representation of new state
+    changed_by = Column(String(255))
+    timestamp = Column(String(50))
