@@ -144,11 +144,22 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
                             <label className="block text-sm font-semibold text-gray-700 mb-1">Agent Code</label>
                             <input
                                 type="text"
+                                list="agent-code-suggestions"
                                 value={formData.use_case_no || ''}
-                                disabled
-                                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-gray-50 text-gray-500 cursor-not-allowed"
-                                placeholder="Auto-generated on save"
+                                onChange={(e) => setFormData({ ...formData, use_case_no: e.target.value })}
+                                className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent ${allBots.some(b => b.use_case_no === formData.use_case_no && b.id !== bot?.id) ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
+                                placeholder="e.g., AUC001"
                             />
+                            <datalist id="agent-code-suggestions">
+                                {allBots.map(b => b.use_case_no && (
+                                    <option key={`code-${b.id}`} value={b.use_case_no} />
+                                ))}
+                            </datalist>
+                            {allBots.some(b => b.use_case_no === formData.use_case_no && b.id !== bot?.id) && (
+                                <p className="text-xs text-red-600 mt-1 flex items-center gap-1 font-medium">
+                                    <AlertTriangle size={12} /> An agent with this code already exists
+                                </p>
+                            )}
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-1">Co-Bot Name *</label>
