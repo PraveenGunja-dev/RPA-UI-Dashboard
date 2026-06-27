@@ -71,6 +71,24 @@ app.include_router(spocs.router)
 app.include_router(visits.router)
 app.include_router(auth.router)
 
+# --- Scheduler Setup ---
+from apscheduler.schedulers.background import BackgroundScheduler
+from send_weekly_summary import run_weekly_summary
+
+scheduler = BackgroundScheduler()
+
+@app.on_event("startup")
+def start_scheduler():
+    # Run every Friday at 17:00 (5:00 PM)
+    scheduler.add_job(run_weekly_summary, 'cron', day_of_week='fri', hour=17, minute=0)
+    scheduler.start()
+    print("Weekly summary scheduler started: Scheduled for every Friday at 17:00.")
+
+@app.on_event("shutdown")
+def stop_scheduler():
+    scheduler.shutdown()
+# -----------------------
+
 # Mount frontend static files
 from pathlib import Path
 
