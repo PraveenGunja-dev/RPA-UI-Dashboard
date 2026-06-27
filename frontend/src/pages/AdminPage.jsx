@@ -62,6 +62,17 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
     // When editing, we need to find department_id and spoc_id from names if not provided
     const getInitialFormData = () => {
         if (!bot) {
+            let nextCode = 'AUC001';
+            if (allBots && allBots.length > 0) {
+                const aucBots = allBots.filter(b => b.use_case_no && String(b.use_case_no).startsWith('AUC'));
+                if (aucBots.length > 0) {
+                    const maxNum = Math.max(...aucBots.map(b => {
+                        const match = String(b.use_case_no).match(/AUC(\d+)/);
+                        return match ? parseInt(match[1], 10) : 0;
+                    }));
+                    nextCode = `AUC${String(maxNum + 1).padStart(3, '0')}`;
+                }
+            }
             return {
                 use_case_name: '',
                 bot_name: '',
@@ -72,7 +83,7 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
                 hours_saved_monthly: 0,
                 pdd_link: '',
                 schedule_time: '',
-                use_case_no: '',
+                use_case_no: nextCode,
                 description: ''
             };
         }
