@@ -40,7 +40,7 @@ async def run_sync_sharepoint(db: Session):
             f for f in all_files 
             if ("dump" in f["Name"].lower() or 
                 "control room" in f["Name"].lower() or 
-                "bot status report" in f["Name"].lower()) 
+                "status report" in f["Name"].lower()) 
             and f["Name"].endswith(".xlsx")
         ]
         

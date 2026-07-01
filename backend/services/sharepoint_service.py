@@ -78,7 +78,7 @@ class SharePointService:
         # Filter for "dump" files or "bot status report"
         dump_files = [
             f for f in files 
-            if ("dump" in f["Name"].lower() or "control room" in f["Name"].lower() or "bot status report" in f["Name"].lower()) 
+            if ("dump" in f["Name"].lower() or "control room" in f["Name"].lower() or "status report" in f["Name"].lower()) 
             and f["Name"].endswith(".xlsx")
         ]
         
