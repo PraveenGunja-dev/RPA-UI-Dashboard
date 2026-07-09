@@ -145,14 +145,28 @@ def parse_master_excel(file_path: str, db: Session) -> Tuple[int, int, int, int,
                     if val is not None:
                         spoc_name = str(val).strip()
                     
+                    spoc_email = get_str('user_email_id') or get_str('email') or get_str('user_email')
+                    spoc_phone = get_str('mobile_number') or get_str('phone')
+                    
                     spoc = None
                     if spoc_name and spoc_name.lower() != 'nan':
                         spoc = db.query(SPOC).filter(SPOC.name == spoc_name).first()
                         if not spoc:
-                            spoc = SPOC(name=spoc_name)
+                            spoc = SPOC(name=spoc_name, email=spoc_email, phone=spoc_phone)
                             db.add(spoc)
                             db.flush()
                             spocs_created += 1
+                        else:
+                            # Update SPOC details if missing or we have new data
+                            updated = False
+                            if spoc_email and spoc.email != spoc_email:
+                                spoc.email = spoc_email
+                                updated = True
+                            if spoc_phone and spoc.phone != spoc_phone:
+                                spoc.phone = spoc_phone
+                                updated = True
+                            if updated:
+                                db.flush()
                     
                     # Check if bot already exists
                     existing_bot = db.query(Bot).filter(Bot.use_case_name == use_case_name).first()
@@ -220,6 +234,11 @@ def parse_master_excel(file_path: str, db: Session) -> Tuple[int, int, int, int,
                     end_date = get_str('enddate')
                     if end_date and isinstance(get_val('enddate'), datetime):
                          end_date = get_val('enddate').strftime('%Y-%m-%d')
+                         
+                    deactivation_date = get_str('deactivation_date') or get_str('inactive_date')
+                    raw_deact = get_val('deactivation_date') or get_val('inactive_date')
+                    if deactivation_date and isinstance(raw_deact, datetime):
+                         deactivation_date = raw_deact.strftime('%Y-%m-%d')
 
                     comments = get_str('comments_/_pending_actions')
                     machine_ip = get_str('botrunnermachine/_ip')
@@ -273,6 +292,7 @@ def parse_master_excel(file_path: str, db: Session) -> Tuple[int, int, int, int,
                         existing_bot.sr_no = sr_no
                         existing_bot.start_date = start_date
                         existing_bot.end_date = end_date
+                        existing_bot.deactivation_date = deactivation_date
                         existing_bot.comments = comments
                         existing_bot.machine_ip = machine_ip
                         existing_bot.execution_time = execution_time
@@ -314,6 +334,7 @@ def parse_master_excel(file_path: str, db: Session) -> Tuple[int, int, int, int,
                             sr_no=sr_no,
                             start_date=start_date,
                             end_date=end_date,
+                            deactivation_date=deactivation_date,
                             comments=comments,
                             machine_ip=machine_ip,
                             execution_time=execution_time,

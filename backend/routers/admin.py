@@ -11,6 +11,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from datetime import datetime, timedelta
 from mail_util import send_new_bot_notification
+from send_weekly_summary import run_weekly_summary
 
 from database import get_db
 from models import FileLog, Bot, Department, SPOC, RegisteredUser, AuditLog
@@ -475,4 +476,10 @@ def get_audit_logs(db: Session = Depends(get_db)):
     """Fetch all admin activity audit logs."""
     logs = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).all()
     return logs
+
+@router.post("/trigger-weekly-summary")
+def trigger_weekly_summary(background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user_email)):
+    """Manually trigger the weekly summary email for testing."""
+    background_tasks.add_task(run_weekly_summary)
+    return {"message": "Weekly summary email triggered successfully in the background."}
 

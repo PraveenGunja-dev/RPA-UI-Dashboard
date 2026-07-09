@@ -3,7 +3,7 @@ import {
     ArrowLeft, Download, FileText, CheckCircle, AlertTriangle, ChevronLeft, ChevronRight, Calendar,
     Bot, Users, Building2, Upload, Search, Plus, Edit2, Home,
     Trash2, X, Save, RefreshCw, ExternalLink, BarChart3, Clock, Shield, Database,
-    HelpCircle, Layers, Cpu, Code2, Calculator, Palette, Info, BookOpen, Menu, LogOut
+    HelpCircle, Layers, Cpu, Code2, Calculator, Palette, Info, BookOpen, Menu, LogOut, Mail
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -963,23 +963,35 @@ const UserManualSection = () => {
 };
 
 // Dashboard Overview Section
-const DashboardSection = ({ stats, onSync, isSyncing }) => (
+const DashboardSection = ({ stats, onSync, isSyncing, onTriggerMail, isSendingMail }) => (
     <div className="space-y-6">
         <div className="flex justify-between items-center">
             <div>
                 <h2 className="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
                 <p className="text-gray-500">System statistics and quick insights</p>
             </div>
-            <button
-                onClick={onSync}
-                disabled={isSyncing}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all ${isSyncing
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50'}`}
-            >
-                <RefreshCw size={18} className={isSyncing ? "animate-spin" : ""} />
-                {isSyncing ? 'Syncing...' : 'Sync Now'}
-            </button>
+            <div className="flex gap-3">
+                <button
+                    onClick={onTriggerMail}
+                    disabled={isSendingMail}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all ${isSendingMail
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50'}`}
+                >
+                    <Mail size={18} className={isSendingMail ? "animate-pulse" : ""} />
+                    {isSendingMail ? 'Sending...' : 'Test Weekly Mail'}
+                </button>
+                <button
+                    onClick={onSync}
+                    disabled={isSyncing}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all ${isSyncing
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50'}`}
+                >
+                    <RefreshCw size={18} className={isSyncing ? "animate-spin" : ""} />
+                    {isSyncing ? 'Syncing...' : 'Sync Now'}
+                </button>
+            </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
@@ -1649,6 +1661,7 @@ export default function AdminPage() {
     });
 
     const [syncing, setSyncing] = useState(false);
+    const [sendingMail, setSendingMail] = useState(false);
 
     useEffect(() => {
         fetchAllData();
@@ -1658,24 +1671,7 @@ export default function AdminPage() {
         if (window.confirm('This will trigger a synchronization with SharePoint. Continue?')) {
             setSyncing(true);
             try {
-                // Import dynamically if not at top, or just assume I add import at top later.
-                // Better to add handleSync here and import at top.
-                // Since I can't do multiple file edits easily in one go for top and bottom, I will validte imports first.
-                // Wait, I can only replace one block.
-                // I will add the handleSync here and then add the button.
-                // I need to add import first?
-                // I will use a separate tool call for import.
-                // This tool call adds the state and logic.
-
-                await axios.post(`${API_BASE_URL}/integration/sync-sharepoint`); // Direct call or use api lib?
-                // The previous code used `syncSharePoint` from `../lib/api`.
-                // Admin page uses axios directly mostly.
-                // I'll stick to axios to match AdminPage style or import the function.
-                // AdminPage uses axios mostly.
-                // I'll use axios here for consistency with unrelated AdminPage code?
-                // Actually `syncSharePoint` in `lib/api` likely does `axios.post('/integration/sync-sharepoint')`.
-                // I'll just use axios here.
-
+                await axios.post(`${API_BASE_URL}/integration/sync-sharepoint`);
                 alert('Sync started successfully. It may take a few moments to reflect.');
                 await fetchAllData();
             } catch (error) {
@@ -1683,6 +1679,21 @@ export default function AdminPage() {
                 alert('Sync failed: ' + (error.response?.data?.message || error.message));
             } finally {
                 setSyncing(false);
+            }
+        }
+    };
+
+    const handleTriggerMail = async () => {
+        if (window.confirm('This will immediately trigger the weekly summary email. Are you sure you want to proceed?')) {
+            setSendingMail(true);
+            try {
+                await axios.post(`${API_BASE_URL}/admin/trigger-weekly-summary`);
+                alert('Weekly summary email triggered successfully.');
+            } catch (error) {
+                console.error('Failed to trigger email:', error);
+                alert('Failed to trigger email: ' + (error.response?.data?.message || error.response?.data?.detail || error.message));
+            } finally {
+                setSendingMail(false);
             }
         }
     };
@@ -1853,7 +1864,7 @@ export default function AdminPage() {
                         <>
                             {activeTab === 'dashboard' && (
                                 <div className="h-full overflow-y-auto pr-2 custom-scrollbar pb-8">
-                                    <DashboardSection stats={stats} onSync={handleSync} isSyncing={syncing} />
+                                    <DashboardSection stats={stats} onSync={handleSync} isSyncing={syncing} onTriggerMail={handleTriggerMail} isSendingMail={sendingMail} />
                                 </div>
                             )}
                             {activeTab === 'bots' && (

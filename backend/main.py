@@ -72,6 +72,7 @@ app.include_router(visits.router)
 app.include_router(auth.router)
 
 # --- Scheduler Setup ---
+import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from send_weekly_summary import run_weekly_summary
 
@@ -79,10 +80,11 @@ scheduler = BackgroundScheduler()
 
 @app.on_event("startup")
 def start_scheduler():
-    # Run every Friday at 17:00 (5:00 PM)
-    scheduler.add_job(run_weekly_summary, 'cron', day_of_week='fri', hour=17, minute=0)
+    # Run every Friday at 17:00 (5:00 PM) IST
+    ist_tz = pytz.timezone("Asia/Kolkata")
+    scheduler.add_job(run_weekly_summary, 'cron', day_of_week='fri', hour=17, minute=0, timezone=ist_tz)
     scheduler.start()
-    print("Weekly summary scheduler started: Scheduled for every Friday at 17:00.")
+    print("Weekly summary scheduler started: Scheduled for every Friday at 17:00 IST.")
 
 @app.on_event("shutdown")
 def stop_scheduler():
