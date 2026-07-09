@@ -86,7 +86,9 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
                 use_case_no: nextCode,
                 description: '',
                 start_date: '',
-                deactivation_date: ''
+                deactivation_date: '',
+                spoc_email: '',
+                spoc_phone: ''
             };
         }
 
@@ -107,12 +109,28 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
         return {
             ...bot,
             department_id: deptId || '',
-            spoc_id: spocId || ''
+            spoc_id: spocId || '',
+            spoc_email: bot.user_email || '',
+            spoc_phone: bot.mobile_number || ''
         };
     };
 
     const [formData, setFormData] = useState(getInitialFormData());
     const [saving, setSaving] = useState(false);
+
+    // Auto-fill SPOC email and phone when SPOC changes
+    useEffect(() => {
+        if (formData.spoc_id) {
+            const spoc = spocs?.find(s => s.id.toString() === formData.spoc_id.toString());
+            if (spoc) {
+                setFormData(prev => ({
+                    ...prev,
+                    spoc_email: spoc.email || prev.spoc_email || '',
+                    spoc_phone: spoc.phone || prev.spoc_phone || ''
+                }));
+            }
+        }
+    }, [formData.spoc_id, spocs]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -216,6 +234,31 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
                             </select>
                         </div>
                     </div>
+
+                    {formData.spoc_id && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">SPOC Email</label>
+                                <input
+                                    type="email"
+                                    value={formData.spoc_email || ''}
+                                    onChange={(e) => setFormData({ ...formData, spoc_email: e.target.value })}
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
+                                    placeholder="e.g., user@adani.com"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">SPOC Mobile</label>
+                                <input
+                                    type="text"
+                                    value={formData.spoc_phone || ''}
+                                    onChange={(e) => setFormData({ ...formData, spoc_phone: e.target.value })}
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
+                                    placeholder="e.g., +91 9876543210"
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>

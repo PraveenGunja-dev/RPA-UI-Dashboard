@@ -38,6 +38,8 @@ class BotCreate(BaseModel):
     description: Optional[str] = None
     start_date: Optional[str] = None
     deactivation_date: Optional[str] = None
+    spoc_email: Optional[str] = None
+    spoc_phone: Optional[str] = None
 
 class BotUpdate(BotCreate):
     pass
@@ -45,6 +47,8 @@ class BotUpdate(BotCreate):
 class SPOCOut(BaseModel):
     id: int
     name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -115,7 +119,7 @@ def export_bots(db: Session = Depends(get_db)):
     headers = [
         "S. No.", "Category", "CoBot Name", "Status", "Description Available",
         "PDD Available", "Description", "Hours Saved (Monthly)", "Hours Saved (This Month)", 
-        "Runs This Month", "Remarks"
+        "Runs This Month", "Remarks", "SPOC Email", "SPOC Mobile"
     ]
     
     # Add Heading
@@ -130,7 +134,7 @@ def export_bots(db: Session = Depends(get_db)):
     # Fixed Column Widths
     col_widths = {
         'A': 8, 'B': 20, 'C': 35, 'D': 15, 'E': 20,
-        'F': 15, 'G': 50, 'H': 22, 'I': 22, 'J': 15, 'K': 30
+        'F': 15, 'G': 50, 'H': 22, 'I': 22, 'J': 15, 'K': 30, 'L': 30, 'M': 20
     }
     for col, width in col_widths.items():
         ws.column_dimensions[col].width = width
@@ -176,7 +180,9 @@ def export_bots(db: Session = Depends(get_db)):
             bot.hours_saved_monthly or 0, # Hours Saved (Monthly)
             hours_saved_this_month or 0, # Hours Saved (This Month)
             runs_this_month, # Runs This Month
-            bot.comments or "-" # Remarks
+            bot.comments or "-", # Remarks
+            bot.spoc.email if bot.spoc else "-", # SPOC Email
+            bot.spoc.phone if bot.spoc else "-" # SPOC Mobile
         ]
         
         for col_num, val in enumerate(row_data, 1):
@@ -247,6 +253,16 @@ def create_bot(bot_data: BotCreate, background_tasks: BackgroundTasks, db: Sessi
                 bot_data.use_case_no = "AUC001"
         else:
             bot_data.use_case_no = "AUC001"
+            
+    # Update SPOC email/phone if provided
+    if bot_data.spoc_id:
+        spoc = db.query(SPOC).filter(SPOC.id == bot_data.spoc_id).first()
+        if spoc:
+            if bot_data.spoc_email is not None:
+                spoc.email = bot_data.spoc_email
+            if bot_data.spoc_phone is not None:
+                spoc.phone = bot_data.spoc_phone
+            db.commit()
     
     new_bot = Bot(
         use_case_name=bot_data.use_case_name,
@@ -337,6 +353,15 @@ def update_bot(bot_id: int, bot_data: BotUpdate, db: Session = Depends(get_db), 
     bot.description = bot_data.description
     bot.start_date = bot_data.start_date
     bot.deactivation_date = bot_data.deactivation_date
+
+    # Update SPOC email/phone if provided
+    if bot_data.spoc_id:
+        spoc = db.query(SPOC).filter(SPOC.id == bot_data.spoc_id).first()
+        if spoc:
+            if bot_data.spoc_email is not None:
+                spoc.email = bot_data.spoc_email
+            if bot_data.spoc_phone is not None:
+                spoc.phone = bot_data.spoc_phone
     
     # Audit Log
     audit = AuditLog(
