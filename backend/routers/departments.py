@@ -301,7 +301,11 @@ def get_department_bots(dept_id: int, db: Session = Depends(get_db)):
             man_hours_till_now=man_hours_till_now,
             sr_no=bot.sr_no,
             description=bot.description,
-            key_benefits=bot.key_benefits
+            key_benefits=bot.key_benefits,
+            user_email=bot.spoc.email if bot.spoc else None,
+            mobile_number=bot.spoc.phone if bot.spoc else None,
+            start_date=bot.start_date,
+            deactivation_date=bot.deactivation_date
         ))
     
     return result

@@ -142,7 +142,11 @@ def get_all_bots(
             hours_saved_month=round(hours_saved_month_calc, 2),
             hours_saved_today=round(hours_saved_today, 2),
             hours_saved_latest_run=round(hours_saved_latest_run, 2),
-            key_benefits=bot.key_benefits
+            key_benefits=bot.key_benefits,
+            user_email=bot.spoc.email if bot.spoc else None,
+            mobile_number=bot.spoc.phone if bot.spoc else None,
+            start_date=bot.start_date,
+            deactivation_date=bot.deactivation_date
         ))
     
     return result
@@ -277,7 +281,10 @@ def get_bot_detail(bot_id: int, db: Session = Depends(get_db)):
         run_status_today=run_status_today,
         total_hours_saved=total_hours_saved,
         total_man_hours_saved=total_man_hours_saved,
-        value_per_run=round(value_per_run, 4) if value_per_run else 0.0
+        value_per_run=round(value_per_run, 4) if value_per_run else 0.0,
+        user_email=bot.spoc.email if bot.spoc else None,
+        mobile_number=bot.spoc.phone if bot.spoc else None,
+        deactivation_date=bot.deactivation_date
     )
 
 

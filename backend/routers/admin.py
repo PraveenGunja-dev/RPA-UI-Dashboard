@@ -35,6 +35,8 @@ class BotCreate(BaseModel):
     pdd_link: Optional[str] = None
     schedule_time: Optional[str] = None
     description: Optional[str] = None
+    start_date: Optional[str] = None
+    deactivation_date: Optional[str] = None
 
 class BotUpdate(BotCreate):
     pass
@@ -257,6 +259,8 @@ def create_bot(bot_data: BotCreate, background_tasks: BackgroundTasks, db: Sessi
         pdd_link=bot_data.pdd_link,
         schedule_time=bot_data.schedule_time,
         description=bot_data.description,
+        start_date=bot_data.start_date,
+        deactivation_date=bot_data.deactivation_date,
         created_at=(datetime.utcnow() + timedelta(hours=5, minutes=30)).isoformat()
     )
     db.add(new_bot)
@@ -271,17 +275,21 @@ def create_bot(bot_data: BotCreate, background_tasks: BackgroundTasks, db: Sessi
             dept_name = dept.name
             
     spoc_name = "N/A"
+    spoc_email = "N/A"
+    spoc_phone = "N/A"
     if new_bot.spoc_id:
         spoc = db.query(SPOC).filter(SPOC.id == new_bot.spoc_id).first()
         if spoc:
             spoc_name = spoc.name
+            spoc_email = spoc.email
+            spoc_phone = spoc.phone
             
     # Fetch admin emails
     admins = db.query(RegisteredUser).filter(RegisteredUser.role == "Admin").all()
     admin_emails = [admin.email for admin in admins if admin.email]
     
     if admin_emails:
-        background_tasks.add_task(send_new_bot_notification, admin_emails, new_bot, dept_name, spoc_name)
+        background_tasks.add_task(send_new_bot_notification, admin_emails, new_bot, dept_name, spoc_name, spoc_email, spoc_phone)
         
     # Audit Log
     audit = AuditLog(
@@ -326,6 +334,8 @@ def update_bot(bot_id: int, bot_data: BotUpdate, db: Session = Depends(get_db), 
     bot.pdd_link = bot_data.pdd_link
     bot.schedule_time = bot_data.schedule_time
     bot.description = bot_data.description
+    bot.start_date = bot_data.start_date
+    bot.deactivation_date = bot_data.deactivation_date
     
     # Audit Log
     audit = AuditLog(

@@ -80,6 +80,7 @@ class BotBase(BaseModel):
     last_run_status: Optional[str] = None
     sr_no: Optional[int] = None
     key_benefits: Optional[str] = None
+    deactivation_date: Optional[str] = None
 
 class BotCreate(BotBase):
     department_id: Optional[int] = None
@@ -124,6 +125,10 @@ class BotListItem(BaseModel):
     hours_saved_today: Optional[float] = 0.0
     hours_saved_latest_run: Optional[float] = 0.0
     key_benefits: Optional[str] = None
+    user_email: Optional[str] = None
+    mobile_number: Optional[str] = None
+    start_date: Optional[str] = None
+    deactivation_date: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -161,6 +166,9 @@ class BotDetail(BaseModel):
     bot_running_status: Optional[str] = None
     sr_no: Optional[int] = None
     key_benefits: Optional[str] = None
+    deactivation_date: Optional[str] = None
+    user_email: Optional[str] = None
+    mobile_number: Optional[str] = None
     hours_saved_today: Optional[float] = 0.0
     run_status_today: Optional[str] = "Not Run"
     total_hours_saved: Optional[float] = 0.0

@@ -84,7 +84,9 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
                 pdd_link: '',
                 schedule_time: '',
                 use_case_no: nextCode,
-                description: ''
+                description: '',
+                start_date: '',
+                deactivation_date: ''
             };
         }
 
@@ -311,6 +313,17 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
                         />
                     </div>
 
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">Activation Date</label>
+                            <input type="date" value={formData.start_date || ''} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">Deactivation Date</label>
+                            <input type="date" value={formData.deactivation_date || ''} onChange={(e) => setFormData({ ...formData, deactivation_date: e.target.value })} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                        </div>
+                    </div>
+
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-1">PDD Link</label>
                         <input
@@ -490,6 +503,10 @@ const BotsSection = ({ bots, departments, spocs, onRefresh }) => {
                                 <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Description</th>
                                 <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Department</th>
                                 <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">SPOC</th>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">User Email</th>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Mobile</th>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Activation</th>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Deactivation</th>
                                 <th className="px-6 py-4 text-center bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Status</th>
                                 <th className="px-6 py-4 text-right bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Hours/Month</th>
                                 <th className="px-6 py-4 text-center bg-gray-50 sticky top-0 z-10 border-b border-gray-200">PDD</th>
@@ -515,6 +532,10 @@ const BotsSection = ({ bots, departments, spocs, onRefresh }) => {
                                     </td>
                                     <td className="px-6 py-4 text-gray-600">{bot.department_name || '-'}</td>
                                     <td className="px-6 py-4 text-gray-600">{bot.spoc_name || '-'}</td>
+                                    <td className="px-6 py-4 text-gray-600">{bot.user_email || '-'}</td>
+                                    <td className="px-6 py-4 text-gray-600">{bot.mobile_number || '-'}</td>
+                                    <td className="px-6 py-4 text-gray-600">{bot.start_date || '-'}</td>
+                                    <td className="px-6 py-4 text-gray-600">{bot.deactivation_date || '-'}</td>
                                     <td className="px-6 py-4 text-center">
                                         <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold ${getStatusColor(bot.status)}`}>
                                             {bot.status || '-'}

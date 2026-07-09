@@ -78,7 +78,7 @@ def send_admin_notification(new_user_email, new_user_name):
         print(f"MAIL ERROR: Failed to send email: {str(e)}")
         return False
 
-def send_new_bot_notification(admin_emails, bot, department_name, spoc_name):
+def send_new_bot_notification(admin_emails, bot, department_name, spoc_name, spoc_email="N/A", spoc_phone="N/A"):
     """
     Sends an email notification to admins when a new bot is created.
     """
@@ -119,6 +119,22 @@ def send_new_bot_notification(admin_emails, bot, department_name, spoc_name):
                     <tr>
                         <td style="padding: 10px; border: 1px solid #eee;"><b>SPOC:</b></td>
                         <td style="padding: 10px; border: 1px solid #eee;">{spoc_name or 'N/A'}</td>
+                    </tr>
+                    <tr style="background-color: #f9f9f9;">
+                        <td style="padding: 10px; border: 1px solid #eee;"><b>User Email ID:</b></td>
+                        <td style="padding: 10px; border: 1px solid #eee;">{spoc_email or 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #eee;"><b>Mobile Number:</b></td>
+                        <td style="padding: 10px; border: 1px solid #eee;">{spoc_phone or 'N/A'}</td>
+                    </tr>
+                    <tr style="background-color: #f9f9f9;">
+                        <td style="padding: 10px; border: 1px solid #eee;"><b>Activation Date:</b></td>
+                        <td style="padding: 10px; border: 1px solid #eee;">{bot.start_date or 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #eee;"><b>Deactivation Date:</b></td>
+                        <td style="padding: 10px; border: 1px solid #eee;">{bot.deactivation_date or 'N/A'}</td>
                     </tr>
                     <tr style="background-color: #f9f9f9;">
                         <td style="padding: 10px; border: 1px solid #eee;"><b>Developer:</b></td>

@@ -48,6 +48,7 @@ class Bot(Base):
     # New fields
     start_date = Column(String(50))
     end_date = Column(String(50))
+    deactivation_date = Column(String(50))
     comments = Column(Text)
     machine_ip = Column(String(200))
     execution_time = Column(String(100))
