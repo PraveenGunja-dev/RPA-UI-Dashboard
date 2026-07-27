@@ -69,13 +69,14 @@ async def upload_daily_report(
             shutil.copyfileobj(file.file, buffer)
         
         # Parse and store data
-        runs, bots_matched, errors = parse_daily_report(file_path, db, report_date)
-        
+        runs, bots_matched, hours_saved, errors = parse_daily_report(file_path, db, report_date)
+
         return {
             "success": len(errors) == 0,
             "message": f"Processed {runs} bot runs, matched {bots_matched} bots",
             "runs_processed": runs,
             "bots_matched": bots_matched,
+            "hours_saved_estimate": hours_saved,
             "report_date": report_date,
             "errors": errors[:10]
         }
