@@ -123,13 +123,20 @@ def parse_master_excel(file_path: str, db: Session) -> Tuple[int, int, int, int,
                         continue
                     
                     records_processed += 1
-                    
+
+                    # Helper to get string val
+                    def get_str(key):
+                        v = get_val(key)
+                        if v is not None:
+                            return str(v).strip()
+                        return None
+
                     # Get or create department
                     dept_name = None
                     val = get_val('department')
                     if val is not None:
                         dept_name = str(val).strip()
-                    
+
                     department = None
                     if dept_name and dept_name.lower() != 'nan':
                         department = db.query(Department).filter(Department.name == dept_name).first()
@@ -138,16 +145,16 @@ def parse_master_excel(file_path: str, db: Session) -> Tuple[int, int, int, int,
                             db.add(department)
                             db.flush()
                             departments_created += 1
-                    
+
                     # Get or create SPOC
                     spoc_name = None
                     val = get_val('business_spoc')
                     if val is not None:
                         spoc_name = str(val).strip()
-                    
+
                     spoc_email = get_str('user_email_id') or get_str('email') or get_str('user_email')
                     spoc_phone = get_str('mobile_number') or get_str('phone')
-                    
+
                     spoc = None
                     if spoc_name and spoc_name.lower() != 'nan':
                         spoc = db.query(SPOC).filter(SPOC.name == spoc_name).first()
@@ -167,16 +174,9 @@ def parse_master_excel(file_path: str, db: Session) -> Tuple[int, int, int, int,
                                 updated = True
                             if updated:
                                 db.flush()
-                    
+
                     # Check if bot already exists
                     existing_bot = db.query(Bot).filter(Bot.use_case_name == use_case_name).first()
-                    
-                    # Helper to get string val
-                    def get_str(key):
-                        v = get_val(key)
-                        if v is not None:
-                            return str(v).strip()
-                        return None
 
                     # Get other fields
                     status = None

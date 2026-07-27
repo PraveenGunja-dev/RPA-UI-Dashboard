@@ -58,7 +58,7 @@ const StatCard = ({ icon: Icon, label, value, color, trend }) => (
 );
 
 // Bot Form Modal
-const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }) => {
+const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [], onRefresh }) => {
     // When editing, we need to find department_id and spoc_id from names if not provided
     const getInitialFormData = () => {
         if (!bot) {
@@ -117,6 +117,10 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
 
     const [formData, setFormData] = useState(getInitialFormData());
     const [saving, setSaving] = useState(false);
+    const [addingNewSpoc, setAddingNewSpoc] = useState(false);
+    const [newSpocData, setNewSpocData] = useState({ name: '', email: '', phone: '' });
+    const [creatingSpoc, setCreatingSpoc] = useState(false);
+    const [spocError, setSpocError] = useState(null);
 
     // Auto-fill SPOC email and phone when SPOC changes
     useEffect(() => {
@@ -140,9 +144,35 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
             onClose();
         } catch (error) {
             console.error('Error saving bot:', error);
-            alert('Failed to save bot');
+            alert(error.response?.data?.detail || 'Failed to save bot');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleCreateSpoc = async () => {
+        if (!newSpocData.name.trim()) {
+            setSpocError('SPOC name is required');
+            return;
+        }
+        setCreatingSpoc(true);
+        setSpocError(null);
+        try {
+            const res = await axios.post(`${API_BASE_URL}/admin/spocs`, newSpocData);
+            const created = res.data;
+            setFormData(prev => ({
+                ...prev,
+                spoc_id: created.id,
+                spoc_email: created.email || '',
+                spoc_phone: created.phone || ''
+            }));
+            if (onRefresh) await onRefresh();
+            setAddingNewSpoc(false);
+            setNewSpocData({ name: '', email: '', phone: '' });
+        } catch (error) {
+            setSpocError(error.response?.data?.detail || 'Failed to create SPOC');
+        } finally {
+            setCreatingSpoc(false);
         }
     };
 
@@ -221,21 +251,66 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">SPOC</label>
-                            <select
-                                value={formData.spoc_id || ''}
-                                onChange={(e) => setFormData({ ...formData, spoc_id: e.target.value })}
-                                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="">Select SPOC</option>
-                                {spocs.map(s => (
-                                    <option key={s.id} value={s.id}>{s.name}</option>
-                                ))}
-                            </select>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="block text-sm font-semibold text-gray-700">SPOC</label>
+                                <button
+                                    type="button"
+                                    onClick={() => { setAddingNewSpoc(v => !v); setSpocError(null); }}
+                                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                >
+                                    {addingNewSpoc ? <X size={12} /> : <Plus size={12} />}
+                                    {addingNewSpoc ? 'Cancel' : 'Add New SPOC'}
+                                </button>
+                            </div>
+                            {!addingNewSpoc ? (
+                                <select
+                                    value={formData.spoc_id || ''}
+                                    onChange={(e) => setFormData({ ...formData, spoc_id: e.target.value })}
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                    <option value="">Select SPOC</option>
+                                    {spocs.map(s => (
+                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <div className="space-y-2 p-3 bg-blue-50/50 border border-blue-100 rounded-xl">
+                                    <input
+                                        type="text"
+                                        value={newSpocData.name}
+                                        onChange={(e) => setNewSpocData({ ...newSpocData, name: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        placeholder="New SPOC name *"
+                                    />
+                                    <input
+                                        type="email"
+                                        value={newSpocData.email}
+                                        onChange={(e) => setNewSpocData({ ...newSpocData, email: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        placeholder="Email (optional)"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={newSpocData.phone}
+                                        onChange={(e) => setNewSpocData({ ...newSpocData, phone: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        placeholder="Phone (optional)"
+                                    />
+                                    {spocError && <p className="text-xs text-red-600 font-medium">{spocError}</p>}
+                                    <button
+                                        type="button"
+                                        onClick={handleCreateSpoc}
+                                        disabled={creatingSpoc}
+                                        className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                    >
+                                        {creatingSpoc ? 'Creating...' : 'Create & Select SPOC'}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    {formData.spoc_id && (
+                    {formData.spoc_id && !addingNewSpoc && (
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-1">SPOC Email</label>
@@ -244,7 +319,7 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
                                     value={formData.spoc_email || ''}
                                     onChange={(e) => setFormData({ ...formData, spoc_email: e.target.value })}
                                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
-                                    placeholder="e.g., user@adani.com"
+                                    placeholder="e.g., user@cb.com"
                                 />
                             </div>
                             <div>
@@ -272,10 +347,10 @@ const BotFormModal = ({ bot, onClose, onSave, departments, spocs, allBots = [] }
                             />
                             <datalist id="status-options">
                                 <option value="Active" />
-                                <option value="Deployed" />
-                                <option value="Under Development" />
-                                <option value="In Active" />
-                                <option value="On Hold" />
+                                <option value="Inactive" />
+                                <option value="PDD" />
+                                <option value="Under UAT" />
+                                <option value="DEV" />
                             </datalist>
                         </div>
                         <div>
@@ -656,6 +731,7 @@ const BotsSection = ({ bots, departments, spocs, onRefresh }) => {
                     departments={departments}
                     spocs={spocs}
                     allBots={bots}
+                    onRefresh={onRefresh}
                 />
             )}
         </div>
@@ -844,7 +920,7 @@ const UserManualSection = () => {
                 <div className="relative z-10">
                     <h1 className="text-3xl font-black text-gray-900 mb-2">Admin User Guide</h1>
                     <p className="text-gray-500 max-w-3xl text-lg">
-                        Complete documentation for managing the Adani Co-Bot Dashboard, including bot configuration, file uploads, and understanding system calculations.
+                        Complete documentation for managing the CB Co-Bot Dashboard, including bot configuration, file uploads, and understanding system calculations.
                     </p>
                 </div>
             </div>
@@ -999,7 +1075,7 @@ const UserManualSection = () => {
 
             {/* Footer */}
             <div className="text-center pt-8 text-gray-400 text-xs border-t border-gray-100 mt-8">
-                <p>Adani Co-Bot Center of Excellence • Version 2.5.0</p>
+                <p>CB Co-Bot Center of Excellence • Version 2.5.0</p>
             </div>
         </div>
     );
@@ -1288,7 +1364,7 @@ const UsersSection = ({ users, onRefresh }) => {
                                     value={formData.email}
                                     onChange={e => setFormData({ ...formData, email: e.target.value })}
                                     className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all font-medium"
-                                    placeholder="user@adani.com"
+                                    placeholder="user@cb.com"
                                 />
                             </div>
                             <div>

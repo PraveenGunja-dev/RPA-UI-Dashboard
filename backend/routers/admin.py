@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from fastapi.responses import FileResponse, StreamingResponse
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import os
 import json
 import re
@@ -41,6 +41,22 @@ class BotCreate(BaseModel):
     spoc_email: Optional[str] = None
     spoc_phone: Optional[str] = None
 
+    # The Add/Edit Bot form sends '' (not null) for unselected dropdowns/numbers,
+    # which fails int/float coercion and used to 422 the whole request.
+    @field_validator('department_id', 'spoc_id', mode='before')
+    @classmethod
+    def blank_id_to_none(cls, v):
+        if v == '' or v is None:
+            return None
+        return v
+
+    @field_validator('hours_saved_monthly', mode='before')
+    @classmethod
+    def blank_hours_to_zero(cls, v):
+        if v == '' or v is None:
+            return 0
+        return v
+
 class BotUpdate(BotCreate):
     pass
 
@@ -49,9 +65,14 @@ class SPOCOut(BaseModel):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
-    
+
     class Config:
         from_attributes = True
+
+class SPOCCreate(BaseModel):
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
 
 class UserCreate(BaseModel):
     email: str
@@ -102,6 +123,31 @@ def get_all_spocs(db: Session = Depends(get_db)):
     """Get all SPOCs for dropdown selection."""
     spocs = db.query(SPOC).order_by(SPOC.name).all()
     return spocs
+
+@router.post("/spocs", response_model=SPOCOut)
+def create_spoc(spoc_data: SPOCCreate, db: Session = Depends(get_db), current_user: str = Depends(get_current_user_email)):
+    """Create a new SPOC (used from the Add/Edit Bot form)."""
+    existing = db.query(SPOC).filter(SPOC.name == spoc_data.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="A SPOC with this name already exists")
+
+    new_spoc = SPOC(name=spoc_data.name, email=spoc_data.email, phone=spoc_data.phone)
+    db.add(new_spoc)
+    db.commit()
+    db.refresh(new_spoc)
+
+    audit = AuditLog(
+        entity_type="SPOC",
+        entity_id=str(new_spoc.id),
+        action_type="CREATE",
+        new_value=json.dumps(spoc_data.model_dump()),
+        changed_by=current_user,
+        timestamp=datetime.utcnow().isoformat()
+    )
+    db.add(audit)
+    db.commit()
+
+    return new_spoc
 
 @router.get("/export-bots")
 def export_bots(db: Session = Depends(get_db)):
