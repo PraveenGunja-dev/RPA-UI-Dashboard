@@ -1,9 +1,6 @@
-"""
-Check for missing daily bot status report data.
+"""Check for missing daily bot status report data.
 Runs daily at 11:00 AM IST. If yesterday's (or older) data is missing,
 sends an email alert to all Admin users.
-
-Skips weekends (Saturday/Sunday) since reports are typically not uploaded on those days.
 """
 
 import os
@@ -59,10 +56,6 @@ def check_missing_data():
         missing_dates = []
         for days_back in range(1, 5):  # Check yesterday through 4 days ago
             check_date = today - timedelta(days=days_back)
-
-            # Skip weekends (Saturday=5, Sunday=6)
-            if check_date.weekday() in (5, 6):
-                continue
 
             check_date_str = check_date.strftime('%Y-%m-%d')
 

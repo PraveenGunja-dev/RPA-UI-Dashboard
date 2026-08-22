@@ -85,11 +85,11 @@ def start_scheduler():
     # Run every Friday at 17:00 (5:00 PM) IST
     scheduler.add_job(run_weekly_summary, 'cron', day_of_week='fri', hour=17, minute=0, timezone=ist_tz)
     # Check for missing daily report data every day at 11:00 AM IST
-    scheduler.add_job(check_missing_data, 'cron', day_of_week='mon-fri', hour=11, minute=0, timezone=ist_tz)
+    scheduler.add_job(check_missing_data, 'cron', hour=11, minute=0, timezone=ist_tz)
     scheduler.start()
     print("Schedulers started:")
     print("  - Weekly summary: Every Friday at 17:00 IST")
-    print("  - Missing data check: Mon-Fri at 11:00 IST")
+    print("  - Missing data check: Every day at 11:00 IST")
 
 @app.on_event("shutdown")
 def stop_scheduler():
