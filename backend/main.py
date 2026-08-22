@@ -75,16 +75,21 @@ app.include_router(auth.router)
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from send_weekly_summary import run_weekly_summary
+from check_missing_data import check_missing_data
 
 scheduler = BackgroundScheduler()
 
 @app.on_event("startup")
 def start_scheduler():
-    # Run every Friday at 17:00 (5:00 PM) IST
     ist_tz = pytz.timezone("Asia/Kolkata")
+    # Run every Friday at 17:00 (5:00 PM) IST
     scheduler.add_job(run_weekly_summary, 'cron', day_of_week='fri', hour=17, minute=0, timezone=ist_tz)
+    # Check for missing daily report data every day at 11:00 AM IST
+    scheduler.add_job(check_missing_data, 'cron', day_of_week='mon-fri', hour=11, minute=0, timezone=ist_tz)
     scheduler.start()
-    print("Weekly summary scheduler started: Scheduled for every Friday at 17:00 IST.")
+    print("Schedulers started:")
+    print("  - Weekly summary: Every Friday at 17:00 IST")
+    print("  - Missing data check: Mon-Fri at 11:00 IST")
 
 @app.on_event("shutdown")
 def stop_scheduler():

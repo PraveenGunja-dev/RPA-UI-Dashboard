@@ -253,3 +253,85 @@ def send_weekly_summary_notification(admin_emails, active_count, new_count, inac
     except Exception as e:
         print(f"MAIL ERROR: Failed to send weekly summary: {str(e)}")
         return False
+
+
+def send_missing_data_notification(admin_emails, missing_dates, last_data_date):
+    """
+    Sends an email notification to admins when daily bot status report
+    data is missing for 24+ hours.
+    """
+    if not admin_emails:
+        print("MAIL ERROR: No admin emails provided for missing data notification.")
+        return False
+
+    missing_count = len(missing_dates)
+    missing_dates_str = ", ".join(missing_dates)
+
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_FROM
+    msg['To'] = ", ".join(admin_emails)
+    msg['Subject'] = f"⚠️ Co-Bot Console: Daily Report Data Missing ({missing_count} day{'s' if missing_count > 1 else ''})"
+
+    # Build rows for missing dates table
+    date_rows = ""
+    for i, d in enumerate(missing_dates):
+        bg = 'background-color: #fff1f0;' if i % 2 == 0 else 'background-color: #fff7e6;'
+        date_rows += f"""
+                    <tr style="{bg}">
+                        <td style="padding: 10px; border: 1px solid #eee; text-align: center;">{d}</td>
+                        <td style="padding: 10px; border: 1px solid #eee; text-align: center; color: #cf1322;">
+                            <b>❌ Not Uploaded</b>
+                        </td>
+                    </tr>"""
+
+    body = f"""
+    <html>
+    <body style="font-family: 'Adani', Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+            <div style="background-color: #d4380d; color: white; padding: 20px; text-align: center;">
+                <h2 style="margin: 0;">⚠️ Missing Daily Report Alert</h2>
+            </div>
+            <div style="padding: 20px;">
+                <p>Hello Admin,</p>
+                <p>The following daily bot status report(s) have <b>not been uploaded</b> to the Co-Bot Console for more than <b>24 hours</b>:</p>
+                
+                <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                    <tr style="background-color: #0b74b0; color: white;">
+                        <th style="padding: 10px; border: 1px solid #eee;">Date</th>
+                        <th style="padding: 10px; border: 1px solid #eee;">Status</th>
+                    </tr>
+                    {date_rows}
+                </table>
+                
+                <div style="background-color: #e6f7ff; border-left: 4px solid #1890ff; padding: 12px; margin: 20px 0;">
+                    <b>Last Available Data:</b> {last_data_date or 'No data found'}
+                </div>
+                
+                <p>Please upload the missing report(s) via <b>SharePoint sync</b> or <b>manual upload</b> to keep the dashboard metrics up to date.</p>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <a href="{APP_BASE_URL}/admin" style="background-color: #d4380d; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Upload Report Now</a>
+                </div>
+            </div>
+            <div style="background-color: #f4f4f4; color: #777; padding: 15px; text-align: center; font-size: 12px;">
+                This is an automated alert from the AGEL Co-Bot Console Platform.
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    msg.attach(MIMEText(body, 'html'))
+
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            if SMTP_PASSWORD:
+                server.starttls()
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(msg)
+        print(f"MAIL SUCCESS: Missing data alert sent to {len(admin_emails)} admins for dates: {missing_dates_str}")
+        return True
+    except Exception as e:
+        print(f"MAIL ERROR: Failed to send missing data alert: {str(e)}")
+        return False
+
