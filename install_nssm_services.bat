@@ -11,17 +11,9 @@ C:\nssm\nssm.exe set RPABackend AppStdout "C:\ServiceLogs\RPABackend_out.log"
 C:\nssm\nssm.exe set RPABackend AppStderr "C:\ServiceLogs\RPABackend_err.log"
 sc config RPABackend start= delayed-auto
 
-echo Installing RPA Dashboard Frontend Service...
-C:\nssm\nssm.exe install RPAFrontend "%PROJECT_ROOT%\start_frontend.bat"
-C:\nssm\nssm.exe set RPAFrontend AppDirectory "%PROJECT_ROOT%"
-C:\nssm\nssm.exe set RPAFrontend AppStdout "C:\ServiceLogs\RPAFrontend_out.log"
-C:\nssm\nssm.exe set RPAFrontend AppStderr "C:\ServiceLogs\RPAFrontend_err.log"
-sc config RPAFrontend start= delayed-auto
-
 echo --------------------------------------------------
-echo Services Installed Successfully!
-echo You can start them right now by running:
+echo Service Installed Successfully!
+echo You can start it right now by running:
 echo C:\nssm\nssm.exe start RPABackend
-echo C:\nssm\nssm.exe start RPAFrontend
 echo --------------------------------------------------
 pause
