@@ -215,47 +215,47 @@ def calculate_fte_savings(
                 else:
                     all_runs = []
                     
-                    # Filter for Recent Period
-                    recent_run_count = 0
-                    month_run_count = 0
+                # Filter for Recent Period
+                recent_run_count = 0
+                month_run_count = 0
+                
+                recent_dates = set()
+                month_dates = set()
+                
+                target_month = ist_now.month
+                target_year = ist_now.year
+                
+                for r in all_runs:
+                    if not r.report_date: continue
+                    try:
+                        dt = None
+                        try: dt = datetime.strptime(r.report_date, '%Y-%m-%d')
+                        except ValueError: dt = datetime.strptime(r.report_date, '%d-%m-%Y')
+                    except ValueError: continue
+                    if not dt: continue
                     
-                    recent_dates = set()
-                    month_dates = set()
+                    # Check Recent (>= recent_start)
+                    if dt >= recent_start and dt <= ist_now:
+                        recent_run_count += 1
+                        recent_dates.add(dt.date())
                     
-                    target_month = ist_now.month
-                    target_year = ist_now.year
-                    
-                    for r in all_runs:
-                        if not r.report_date: continue
-                        try:
-                            dt = None
-                            try: dt = datetime.strptime(r.report_date, '%Y-%m-%d')
-                            except ValueError: dt = datetime.strptime(r.report_date, '%d-%m-%Y')
-                        except ValueError: continue
-                        if not dt: continue
+                    # Check Month
+                    if dt.year == target_year and dt.month == target_month:
+                        month_run_count += 1
+                        month_dates.add(dt.date())
                         
-                        # Check Recent (>= recent_start)
-                        if dt >= recent_start and dt <= ist_now:
-                            recent_run_count += 1
-                            recent_dates.add(dt.date())
-                        
-                        # Check Month
-                        if dt.year == target_year and dt.month == target_month:
-                            month_run_count += 1
-                            month_dates.add(dt.date())
-                            
-                    # Calculate Phase 2 Savings
-                    # EXACT VALUE STRATEGY:
-                    # We count EVERY successful run from the dump for EVERY bot.
-                    # Start Date is strictly respected to avoid pre-deployment artifacts.
-                    # No capping for "Daily" bots - if they ran twice, they saved twice.
-                    
-                    recent_savings = recent_run_count * per_run_value
-                    hours_saved_month = month_run_count * per_run_value
-                    
-                    # Calculate Average (for Phase 1 estimation)
-                    if active_days_calc > 0:
-                        avg_runs_per_day = recent_run_count / active_days_calc
+                # Calculate Phase 2 Savings
+                # EXACT VALUE STRATEGY:
+                # We count EVERY successful run from the dump for EVERY bot.
+                # Start Date is strictly respected to avoid pre-deployment artifacts.
+                # No capping for "Daily" bots - if they ran twice, they saved twice.
+                
+                recent_savings = recent_run_count * per_run_value
+                hours_saved_month = month_run_count * per_run_value
+                
+                # Calculate Average (for Phase 1 estimation)
+                if active_days_calc > 0:
+                    avg_runs_per_day = recent_run_count / active_days_calc
                         
         hours_saved_till_date += recent_savings
         
