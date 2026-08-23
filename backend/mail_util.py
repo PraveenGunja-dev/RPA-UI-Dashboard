@@ -335,3 +335,166 @@ def send_missing_data_notification(admin_emails, missing_dates, last_data_date):
         print(f"MAIL ERROR: Failed to send missing data alert: {str(e)}")
         return False
 
+
+def send_performance_report_notification(admin_emails, stats, report_type, period_str):
+    """
+    Sends a highly visual weekly/monthly report with embedded charts and tables.
+    stats = {
+        'total_runs': int,
+        'success_rate': str (e.g. '94.2%'),
+        'hours_saved': float,
+        'labels': list,
+        'data': list,
+        'top_bots': list of dicts {'name': str, 'runs': int, 'hours': float},
+        'failing_bots': list of dicts {'name': str, 'failed_runs': int, 'success_rate': str}
+    }
+    """
+    if not admin_emails:
+        print("MAIL ERROR: No admin emails provided for performance report.")
+        return False
+
+    import urllib.parse
+    import json
+
+    # Generate QuickChart URL for the Trend Graph
+    chart_config = {
+        "type": "line",
+        "data": {
+            "labels": stats.get('labels', []),
+            "datasets": [{
+                "label": "Runs",
+                "data": stats.get('data', []),
+                "fill": True,
+                "backgroundColor": "rgba(11,116,176,0.1)",
+                "borderColor": "#0b74b0",
+                "tension": 0.4
+            }]
+        },
+        "options": {
+            "plugins": {
+                "legend": {"display": False}
+            }
+        }
+    }
+    encoded_config = urllib.parse.quote(json.dumps(chart_config))
+    chart_url = f"https://quickchart.io/chart?c={encoded_config}"
+
+    # Build Top Bots Table
+    top_bots_html = ""
+    for i, bot in enumerate(stats.get('top_bots', [])):
+        bg = '#f9f9f9' if i % 2 != 0 else '#ffffff'
+        top_bots_html += f'''
+        <tr style="background-color: {bg};">
+            <td style="padding: 10px; border: 1px solid #eee;">{bot['name']}</td>
+            <td style="padding: 10px; border: 1px solid #eee; text-align: center;">{bot['runs']}</td>
+            <td style="padding: 10px; border: 1px solid #eee; text-align: center;"><strong>{bot['hours']}</strong></td>
+        </tr>
+        '''
+    if not top_bots_html:
+        top_bots_html = '<tr><td colspan="3" style="padding: 10px; text-align: center;">No data available</td></tr>'
+
+    # Build Failing Bots Table
+    failing_bots_html = ""
+    for i, bot in enumerate(stats.get('failing_bots', [])):
+        bg = '#fff1f0' if i % 2 == 0 else '#ffffff'
+        failing_bots_html += f'''
+        <tr style="background-color: {bg};">
+            <td style="padding: 10px; border: 1px solid #eee;">{bot['name']}</td>
+            <td style="padding: 10px; border: 1px solid #eee; text-align: center; color: #cf1322;"><strong>{bot['failed_runs']}</strong></td>
+            <td style="padding: 10px; border: 1px solid #eee; text-align: center;">{bot['success_rate']}</td>
+        </tr>
+        '''
+    if not failing_bots_html:
+        failing_bots_html = '<tr><td colspan="3" style="padding: 10px; text-align: center;">No critical failures</td></tr>'
+
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_FROM
+    msg['To'] = ", ".join(admin_emails)
+    msg['Subject'] = f"📊 Adani RPA - {report_type} Performance Report"
+
+    body = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0;">
+    <div style="max-width: 650px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: #fff;">
+      <!-- Header -->
+      <div style="background-color: #0b74b0; color: white; padding: 20px; text-align: center;">
+        <h1 style="margin: 0; font-size: 24px;">📊 Adani RPA - {report_type} Performance Report</h1>
+        <p style="margin: 5px 0 0; font-size: 14px; opacity: 0.9;">{period_str}</p>
+      </div>
+      
+      <div style="padding: 20px;">
+        <p>Hello Admin,</p>
+        <p>Here is your comprehensive summary of the Co-Bot Console automation performance.</p>
+
+        <!-- KPI Dashboard -->
+        <table width="100%" style="margin: 20px 0; text-align: center; border-collapse: separate; border-spacing: 10px 0;">
+          <tr>
+            <td style="background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 8px; padding: 15px; width: 33%;">
+              <h3 style="margin: 0; color: #389e0d; font-size: 26px;">{stats.get('total_runs', 0):,}</h3>
+              <p style="margin: 5px 0 0; color: #52c41a; font-size: 12px; font-weight: bold;">Total Runs</p>
+            </td>
+            <td style="background: #e6f7ff; border: 1px solid #91d5ff; border-radius: 8px; padding: 15px; width: 33%;">
+              <h3 style="margin: 0; color: #0050b3; font-size: 26px;">{stats.get('success_rate', '0%')}</h3>
+              <p style="margin: 5px 0 0; color: #096dd9; font-size: 12px; font-weight: bold;">Success Rate</p>
+            </td>
+            <td style="background: #f9f0ff; border: 1px solid #d3adf7; border-radius: 8px; padding: 15px; width: 33%;">
+              <h3 style="margin: 0; color: #531dab; font-size: 26px;">{stats.get('hours_saved', 0):,}</h3>
+              <p style="margin: 5px 0 0; color: #722ed1; font-size: 12px; font-weight: bold;">Hours Saved</p>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Embedded Trend Graph -->
+        <h3 style="color: #0b74b0; border-bottom: 2px solid #eee; padding-bottom: 5px;">📈 Execution Trend</h3>
+        <div style="text-align: center; margin: 20px 0;">
+          <img src="{chart_url}" width="100%" alt="Trend Graph" style="max-width: 100%; border: 1px solid #eee; border-radius: 8px;"/>
+        </div>
+
+        <!-- Top Performing Bots Table -->
+        <h3 style="color: #0b74b0; border-bottom: 2px solid #eee; padding-bottom: 5px;">🏆 Top Performing Bots</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+          <tr style="background-color: #0b74b0; color: white;">
+            <th style="padding: 10px; border: 1px solid #eee; text-align: left;">Bot Name</th>
+            <th style="padding: 10px; border: 1px solid #eee; text-align: center;">Runs</th>
+            <th style="padding: 10px; border: 1px solid #eee; text-align: center;">Hours Saved</th>
+          </tr>
+          {top_bots_html}
+        </table>
+
+        <!-- Attention Required Table -->
+        <h3 style="color: #cf1322; border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 30px;">⚠️ Attention Required (High Failure)</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+          <tr style="background-color: #cf1322; color: white;">
+            <th style="padding: 10px; border: 1px solid #eee; text-align: left;">Bot Name</th>
+            <th style="padding: 10px; border: 1px solid #eee; text-align: center;">Failed Runs</th>
+            <th style="padding: 10px; border: 1px solid #eee; text-align: center;">Success Rate</th>
+          </tr>
+          {failing_bots_html}
+        </table>
+
+        <div style="text-align: center; margin-top: 30px;">
+          <a href="{APP_BASE_URL}/home" style="background-color: #0b74b0; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Full Dashboard</a>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div style="background-color: #f4f4f4; color: #777; padding: 15px; text-align: center; font-size: 12px;">
+        Automated Report via AGEL Co-Bot Console Platform
+      </div>
+    </div>
+    </body>
+    </html>
+    """
+    
+    msg.attach(MIMEText(body, 'html'))
+
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            if SMTP_PASSWORD:
+                server.starttls()
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(msg)
+        print(f"MAIL SUCCESS: {report_type} performance report sent to {len(admin_emails)} admins")
+        return True
+    except Exception as e:
+        print(f"MAIL ERROR: Failed to send {report_type} report: {str(e)}")
+        return False
