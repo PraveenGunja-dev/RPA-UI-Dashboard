@@ -138,7 +138,17 @@ def send_reports(report_type="Weekly"):
             print("Not enough data to send report. Exiting.")
             return
 
-        success = send_performance_report_notification(admin_emails, stats, report_type, period_str)
+        # Generate the PPT
+        try:
+            from generate_ppt import generate_deck, OUT_PATH as PPT_OUT_PATH
+            days = 30 if report_type.lower() == "monthly" else 7
+            generate_deck(days=days)
+            ppt_path = PPT_OUT_PATH
+        except Exception as e:
+            print(f"Error generating PPT: {e}")
+            ppt_path = None
+
+        success = send_performance_report_notification(admin_emails, stats, report_type, period_str, ppt_path=ppt_path)
         if success:
             print(f"Successfully sent {report_type} report to admins.")
         else:

@@ -336,7 +336,7 @@ def send_missing_data_notification(admin_emails, missing_dates, last_data_date):
         return False
 
 
-def send_performance_report_notification(admin_emails, stats, report_type, period_str):
+def send_performance_report_notification(admin_emails, stats, report_type, period_str, ppt_path=None):
     """
     Sends a highly visual weekly/monthly report with embedded charts and tables.
     stats = {
@@ -486,6 +486,13 @@ def send_performance_report_notification(admin_emails, stats, report_type, perio
     """
     
     msg.attach(MIMEText(body, 'html'))
+    
+    if ppt_path and os.path.exists(ppt_path):
+        from email.mime.application import MIMEApplication
+        with open(ppt_path, "rb") as f:
+            part = MIMEApplication(f.read(), Name=os.path.basename(ppt_path))
+        part['Content-Disposition'] = f'attachment; filename="{os.path.basename(ppt_path)}"'
+        msg.attach(part)
 
     try:
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
