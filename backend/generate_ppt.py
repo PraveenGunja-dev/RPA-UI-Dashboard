@@ -21,6 +21,20 @@ def get_df(query, params=()):
     conn.close()
     return df
 
+def apply_font_to_shape(shape, font_name="Adani"):
+    if shape.has_text_frame:
+        for p in shape.text_frame.paragraphs:
+            p.font.name = font_name
+            for r in p.runs:
+                r.font.name = font_name
+    elif shape.has_table:
+        for row in shape.table.rows:
+            for cell in row.cells:
+                for p in cell.text_frame.paragraphs:
+                    p.font.name = font_name
+                    for r in p.runs:
+                        r.font.name = font_name
+
 def generate_deck(days=7):
     print(f"Generating Executive PPT for {days} days...")
     
@@ -127,6 +141,7 @@ def generate_deck(days=7):
         for p in cell.text_frame.paragraphs:
             p.font.color.rgb = RGBColor(255, 255, 255)
             p.font.bold = True
+            p.font.name = 'Adani'
             p.font.size = Pt(14)
             if i > 0: p.alignment = PP_ALIGN.CENTER
             
@@ -145,6 +160,7 @@ def generate_deck(days=7):
             cell.fill.solid()
             cell.fill.fore_color.rgb = bg_color
             for p in cell.text_frame.paragraphs:
+                p.font.name = 'Adani'
                 p.font.size = Pt(14)
                 p.font.color.rgb = RGBColor(40, 40, 40)
                 if c_idx > 0: p.alignment = PP_ALIGN.CENTER
@@ -191,6 +207,7 @@ def generate_deck(days=7):
             for p in cell.text_frame.paragraphs:
                 p.font.color.rgb = RGBColor(255, 255, 255)
                 p.font.bold = True
+                p.font.name = 'Adani'
                 p.font.size = Pt(14)
                 if i > 0: p.alignment = PP_ALIGN.CENTER
                 
@@ -205,6 +222,7 @@ def generate_deck(days=7):
                 cell.fill.solid()
                 cell.fill.fore_color.rgb = bg_color
                 for p in cell.text_frame.paragraphs:
+                    p.font.name = 'Adani'
                     p.font.size = Pt(14)
                     p.font.color.rgb = RGBColor(40, 40, 40)
                     if c_idx > 0: p.alignment = PP_ALIGN.CENTER
@@ -213,6 +231,7 @@ def generate_deck(days=7):
         txBox = s_new.shapes.add_textbox(Inches(2), Inches(3.5), Inches(9.3), Inches(1))
         p = txBox.text_frame.add_paragraph()
         p.text = "No new bots were deployed during this reporting period."
+        p.font.name = 'Adani'
         p.font.size = Pt(20)
         p.font.color.rgb = RGBColor(100, 100, 100)
         p.font.italic = True
@@ -238,12 +257,14 @@ def generate_deck(days=7):
         
         p1 = tf.add_paragraph()
         p1.text = "Value Delivered"
+        p1.font.name = 'Adani'
         p1.font.size = Pt(28)
         p1.font.bold = True
         p1.font.color.rgb = RGBColor(11, 78, 122) # Adani Blue
         
         p2 = tf.add_paragraph()
         p2.text = f"\nTotal Hours Saved:\n{total_hours_saved:,} Hours"
+        p2.font.name = 'Adani'
         p2.font.size = Pt(20)
         p2.font.color.rgb = RGBColor(60, 60, 60)
         
@@ -251,6 +272,7 @@ def generate_deck(days=7):
         ftes_saved = total_hours_saved / 160
         p3 = tf.add_paragraph()
         p3.text = f"\nFull-Time Equivalents (FTEs) Saved:\n{ftes_saved:.1f} FTEs"
+        p3.font.name = 'Adani'
         p3.font.size = Pt(24)
         p3.font.bold = True
         p3.font.color.rgb = RGBColor(56, 180, 74) # Adani Green
@@ -279,6 +301,7 @@ def generate_deck(days=7):
                 for p in cell.text_frame.paragraphs:
                     p.font.color.rgb = RGBColor(255, 255, 255)
                     p.font.bold = True
+                    p.font.name = 'Adani'
                     p.font.size = Pt(14)
                     if i > 0: p.alignment = PP_ALIGN.CENTER
                     
@@ -292,6 +315,7 @@ def generate_deck(days=7):
                     cell.fill.solid()
                     cell.fill.fore_color.rgb = bg_color
                     for p in cell.text_frame.paragraphs:
+                        p.font.name = 'Adani'
                         p.font.size = Pt(14)
                         p.font.color.rgb = RGBColor(40, 40, 40)
                         if c_idx > 0: p.alignment = PP_ALIGN.CENTER
@@ -302,6 +326,11 @@ def generate_deck(days=7):
             if shape.is_placeholder and shape.placeholder_format.type == 2: # BODY
                 sp = shape._sp
                 sp.getparent().remove(sp)
+
+    # Enforce Adani font globally
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            apply_font_to_shape(shape, "Adani Regular")
 
     if not os.path.exists(os.path.dirname(OUT_PATH)):
         os.makedirs(os.path.dirname(OUT_PATH))
