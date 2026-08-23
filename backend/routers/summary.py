@@ -18,31 +18,38 @@ def get_org_summary(db: Session = Depends(get_db)):
     # Total bots
     total_bots = db.query(func.count(Bot.id)).scalar() or 0
     
-    # Status counts
-    # Status counts - Robust check via utils
-    all_bots = db.query(Bot).all()
-    deployed_bots = sum(1 for b in all_bots if is_bot_active(b.status))
+    # Status counts - Optimize by fetching ONLY the status string to save memory
+    all_statuses = [s[0] for s in db.query(Bot.status).all()]
+    deployed_bots = sum(1 for s in all_statuses if is_bot_active(s))
     
     # Get today's date for run stats
     today = datetime.now().strftime('%Y-%m-%d')
     
-    # Bot runs today
-    today_runs = db.query(BotRun).filter(BotRun.report_date == today).all()
+    # Aggregated Run Stats using native SQL
+    from sqlalchemy import case
+    run_stats = db.query(
+        func.count(BotRun.id).label('total'),
+        func.sum(case((BotRun.run_status.ilike('%completed%'), 1), else_=0)).label('completed'),
+        func.sum(case((BotRun.run_status.ilike('%failed%'), 1), else_=0)).label('failed')
+    ).filter(BotRun.report_date == today).first()
     
-    total_runs_today = len(today_runs)
-    successful_runs_today = len([r for r in today_runs if r.run_status and 'completed' in r.run_status.lower()])
-    failed_runs_today = len([r for r in today_runs if r.run_status and 'failed' in r.run_status.lower()])
+    total_runs_today = run_stats.total or 0
+    successful_runs_today = run_stats.completed or 0
+    failed_runs_today = run_stats.failed or 0
     
-    # Count running bots (bots with runs today that completed)
-    running_bot_ids = set(r.bot_id for r in today_runs if r.run_status and 'completed' in r.run_status.lower())
-    running_bots = len(running_bot_ids)
+    # Distinct running bots (completed runs today)
+    running_bots = db.query(func.count(func.distinct(BotRun.bot_id))).filter(
+        BotRun.report_date == today,
+        BotRun.run_status.ilike('%completed%')
+    ).scalar() or 0
     
-    # Idle bots (deployed but not run today)
     idle_bots = deployed_bots - running_bots if deployed_bots > running_bots else 0
     
-    # Failed bots (bots with failed runs today)
-    failed_bot_ids = set(r.bot_id for r in today_runs if r.run_status and 'failed' in r.run_status.lower())
-    failed_bots = len(failed_bot_ids)
+    # Distinct failed bots (failed runs today)
+    failed_bots = db.query(func.count(func.distinct(BotRun.bot_id))).filter(
+        BotRun.report_date == today,
+        BotRun.run_status.ilike('%failed%')
+    ).scalar() or 0
     
     # Department and SPOC counts
     total_departments = db.query(func.count(Department.id)).scalar() or 0

@@ -70,12 +70,12 @@ class BotRun(Base):
     __tablename__ = "bot_runs"
     
     id = Column(Integer, primary_key=True, index=True)
-    bot_id = Column(Integer, ForeignKey("bots.id"))
-    run_status = Column(String(50))  # Completed, Failed, Running
+    bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
+    run_status = Column(String(50), index=True)  # Completed, Failed, Running
     started_on = Column(String(100))
     ended_on = Column(String(100))
     device_name = Column(String(200))
-    report_date = Column(String(50))
+    report_date = Column(String(50), index=True)
     automation_type = Column(String(50))
     
     bot = relationship("Bot", back_populates="runs")

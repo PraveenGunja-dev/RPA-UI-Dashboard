@@ -45,12 +45,39 @@ def get_all_bots(
     # helper to find global latest date - matches Department Logic
     global_latest_date = db.query(func.max(BotRun.report_date)).scalar()
     target_date_str = global_latest_date if global_latest_date else today.strftime('%Y-%m-%d')
+    
+    # ---------------------------------------------------------
+    # PERFORMANCE OPTIMIZATION: Pre-fetch data to avoid N+1
+    # ---------------------------------------------------------
+    bot_ids = [b.id for b in bots]
+    from sqlalchemy import or_
+    
+    # 1. Fetch latest run for each bot
+    subq = db.query(func.max(BotRun.id).label("max_id")).filter(BotRun.bot_id.in_(bot_ids)).group_by(BotRun.bot_id).subquery()
+    latest_runs_list = db.query(BotRun).join(subq, BotRun.id == subq.c.max_id).all()
+    latest_runs_map = {r.bot_id: r for r in latest_runs_list}
+    
+    # 2. Fetch all successful runs for calculate_fte_savings
+    successful_runs_list = db.query(BotRun).filter(
+        BotRun.bot_id.in_(bot_ids),
+        or_(
+            BotRun.run_status.ilike('%completed%'),
+            BotRun.run_status.ilike('%success%'),
+            BotRun.run_status.ilike('%pass%'),
+            BotRun.run_status.ilike('%processed%'),
+            BotRun.run_status.ilike('%done%')
+        )
+    ).all()
+    runs_by_bot = {}
+    for r in successful_runs_list:
+        runs_by_bot.setdefault(r.bot_id, []).append(r)
+        
+    ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    # ---------------------------------------------------------
 
     for bot in bots:
-        # Get latest run
-        latest_run = db.query(BotRun).filter(
-            BotRun.bot_id == bot.id
-        ).order_by(BotRun.report_date.desc(), BotRun.id.desc()).first()
+        # Get latest run (from memory map)
+        latest_run = latest_runs_map.get(bot.id)
         
         dept_name = bot.department.name if bot.department else None
         # Normalize BT -> Business Transformation
@@ -63,10 +90,8 @@ def get_all_bots(
         hours_monthly = bot.hours_saved_monthly or 0
         hours_per_day = hours_monthly / 30 if hours_monthly else 0
         
-        # Calculate hours till now using unified utility
-        ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
-        
-        hours_saved_month_calc, hours_till_now = calculate_fte_savings(bot, ist_now, db)
+        # Calculate hours till now using unified utility with pre-fetched data
+        hours_saved_month_calc, hours_till_now = calculate_fte_savings(bot, ist_now, db, prefetched_runs=runs_by_bot.get(bot.id, []))
         
         # Format deployed date for display
         formatted_date = bot.deployed_date

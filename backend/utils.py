@@ -121,7 +121,8 @@ def calculate_realized_savings(bot, report_date: str, runs_count: int = 1) -> fl
 def calculate_fte_savings(
     bot,
     ist_now=None,
-    db=None 
+    db=None,
+    prefetched_runs=None
 ):
     """
     Calculate FTE Savings based on strict logic:
@@ -196,8 +197,9 @@ def calculate_fte_savings(
                 # Calculate Duration of Recent Period (for Average calc)
                 recent_duration = ist_now - recent_start
                 active_days_calc = recent_duration.total_seconds() / 86400.0
-                
-                if db:
+                if prefetched_runs is not None:
+                    all_runs = prefetched_runs
+                elif db:
                     from sqlalchemy import or_
                     # Fetch all successful runs
                     all_runs = db.query(BotRun).filter(
@@ -210,6 +212,8 @@ def calculate_fte_savings(
                             BotRun.run_status.ilike('%done%')
                         )
                     ).all()
+                else:
+                    all_runs = []
                     
                     # Filter for Recent Period
                     recent_run_count = 0
