@@ -77,8 +77,9 @@ from fastapi import HTTPException
 @app.get("/api/download-ppt")
 async def download_ppt():
     try:
-        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "generate_ppt.js")
-        result = subprocess.run(["node", script_path], capture_output=True, text=True, check=True)
+        # Trigger the python script to generate the PPT
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generate_ppt.py")
+        result = subprocess.run(["python", script_path], capture_output=True, text=True, check=True)
         print("PPT Generation Output:", result.stdout)
         
         ppt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads", "Adani_Portfolio_RPA_Report.pptx")
