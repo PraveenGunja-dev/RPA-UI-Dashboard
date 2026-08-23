@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import datetime
+import argparse
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
@@ -22,23 +23,29 @@ def query_db(query):
     conn.close()
     return [dict(row) for row in rows]
 
-def generate_deck():
+def generate_deck(days=None):
     print("Fetching RPA metrics from database...")
+    
+    date_filter = ""
+    if days:
+        cutoff = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime('%Y-%m-%d')
+        date_filter = f" AND r.report_date >= '{cutoff}'"
+        print(f"Filtering data for the last {days} days (Since {cutoff})")
     
     # 1. KPIs
     total_bots_res = query_db("SELECT COUNT(*) as count FROM bots WHERE status != 'Inactive'")
     total_bots = total_bots_res[0]['count']
     
-    runs_res = query_db("SELECT COUNT(*) as count, SUM(CASE WHEN run_status='Completed' THEN 1 ELSE 0 END) as successful FROM bot_runs")
+    runs_res = query_db(f"SELECT COUNT(*) as count, SUM(CASE WHEN r.run_status='Completed' THEN 1 ELSE 0 END) as successful FROM bot_runs r WHERE 1=1 {date_filter}")
     total_runs = runs_res[0]['count']
     successful_runs = runs_res[0]['successful'] or 0
     success_rate = f"{(successful_runs / total_runs * 100):.1f}%" if total_runs > 0 else "0%"
     
-    hours_res = query_db("SELECT SUM(b.per_day_saving_hours) as hours FROM bot_runs r JOIN bots b ON r.bot_id = b.id WHERE r.run_status='Completed'")
+    hours_res = query_db(f"SELECT SUM(b.per_day_saving_hours) as hours FROM bot_runs r JOIN bots b ON r.bot_id = b.id WHERE r.run_status='Completed' {date_filter}")
     total_hours_saved = round(hours_res[0]['hours'] or 0)
     
     # 2. Dept Breakdown
-    dept_res = query_db("""
+    dept_res = query_db(f"""
         SELECT d.name as department, 
                COUNT(r.id) as runs, 
                SUM(CASE WHEN r.run_status='Completed' THEN 1 ELSE 0 END) as successful_runs,
@@ -46,6 +53,7 @@ def generate_deck():
         FROM bot_runs r 
         JOIN bots b ON r.bot_id = b.id 
         JOIN departments d ON b.department_id = d.id 
+        WHERE 1=1 {date_filter}
         GROUP BY d.name
         ORDER BY hours DESC
         LIMIT 6
@@ -220,4 +228,8 @@ def generate_deck():
     print(f"Successfully generated Executive PPT at: {OUT_PATH}")
 
 if __name__ == "__main__":
-    generate_deck()
+    parser = argparse.ArgumentParser(description="Generate Executive PPT")
+    parser.add_argument("--days", type=int, default=None, help="Generate PPT for the last N days")
+    args = parser.parse_args()
+    
+    generate_deck(days=args.days)
