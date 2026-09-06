@@ -96,35 +96,8 @@ async def download_ppt():
         raise HTTPException(status_code=500, detail=f"Failed to generate PPT: {e.stderr}")
 
 # --- Scheduler Setup ---
-import pytz
-from apscheduler.schedulers.background import BackgroundScheduler
-from send_periodic_reports import send_reports
-from check_missing_data import check_missing_data
-
-scheduler = BackgroundScheduler()
-
-@app.on_event("startup")
-def start_scheduler():
-    ist_tz = pytz.timezone("Asia/Kolkata")
-    
-    # Run Weekly Report every Friday at 17:00 (5:00 PM) IST
-    scheduler.add_job(send_reports, 'cron', args=["Weekly"], day_of_week='fri', hour=17, minute=0, timezone=ist_tz)
-    
-    # Run Monthly Report on the 1st of every month at 09:00 AM IST
-    scheduler.add_job(send_reports, 'cron', args=["Monthly"], day='1', hour=9, minute=0, timezone=ist_tz)
-    
-    # Check for missing daily report data every day at 11:00 AM IST
-    scheduler.add_job(check_missing_data, 'cron', hour=11, minute=0, timezone=ist_tz)
-    
-    scheduler.start()
-    print("Schedulers started:")
-    print("  - Weekly Performance Report: Every Friday at 17:00 IST")
-    print("  - Monthly Performance Report: 1st of every month at 09:00 IST")
-    print("  - Missing Data Check: Every day at 11:00 IST")
-
-@app.on_event("shutdown")
-def stop_scheduler():
-    scheduler.shutdown()
+# We have migrated to Windows Task Scheduler using setup_schedules.bat
+# This prevents jobs from dying when Uvicorn restarts or goes idle.
 # -----------------------
 
 # Mount frontend static files
