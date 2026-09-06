@@ -147,11 +147,17 @@ async def callback(code: str, background_tasks: BackgroundTasks, state: str = No
         encoded_jwt = jwt.encode(token_data, JWT_SECRET, algorithm=ALGORITHM)
         
         # Set cookie and redirect to home
-        base_url = os.getenv("FRONTEND_BASE_URL", "/cobot/")
-        home_url = f"{base_url}home".replace("//", "/")
-        if not base_url.endswith("/"):
-            home_url = f"{base_url}/home"
+        from urllib.parse import urlparse
+        app_base_url = os.getenv("APP_BASE_URL")
+        if app_base_url:
+            base_url = urlparse(app_base_url).path
+        else:
+            base_url = os.getenv("FRONTEND_BASE_URL", "/cobot/")
             
+        if not base_url.endswith("/"):
+            base_url += "/"
+            
+        home_url = f"{base_url}home".replace("//", "/")
         response = RedirectResponse(url=home_url)
         
         # Trigger background sync "right at that time" as requested
@@ -233,7 +239,16 @@ async def get_me(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/logout")
 async def logout(response: Response):
-    base_url = os.getenv("FRONTEND_BASE_URL", "/cobot/")
+    app_base_url = os.getenv("APP_BASE_URL")
+    if app_base_url:
+        from urllib.parse import urlparse
+        base_url = urlparse(app_base_url).path
+    else:
+        base_url = os.getenv("FRONTEND_BASE_URL", "/cobot/")
+        
+    if not base_url.endswith("/"):
+        base_url += "/"
+        
     response = RedirectResponse(url=base_url)
     response.delete_cookie("auth_token")
     return response
