@@ -147,7 +147,12 @@ async def callback(code: str, background_tasks: BackgroundTasks, state: str = No
         encoded_jwt = jwt.encode(token_data, JWT_SECRET, algorithm=ALGORITHM)
         
         # Set cookie and redirect to home
-        response = RedirectResponse(url="/cobot/home")
+        base_url = os.getenv("FRONTEND_BASE_URL", "/cobot/")
+        home_url = f"{base_url}home".replace("//", "/")
+        if not base_url.endswith("/"):
+            home_url = f"{base_url}/home"
+            
+        response = RedirectResponse(url=home_url)
         
         # Trigger background sync "right at that time" as requested
         background_tasks.add_task(background_sync_wrapper)
@@ -174,22 +179,61 @@ async def callback(code: str, background_tasks: BackgroundTasks, state: str = No
 
 def get_current_user_email(request: Request) -> str:
     """Dependency to extract user email from auth token."""
-    return "dev@adani.com"
+    token = request.cookies.get("auth_token")
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        return payload.get("sub", "").lower().strip()
+    except:
+        return None
 
 @router.get("/me")
 async def get_me(request: Request, db: Session = Depends(get_db)):
-    # FOR NOW: Bypass SSO and always authenticate as an Admin
-    return {
-        "authenticated": True,
-        "user": {
-            "email": "dev@adani.com",
-            "name": "Developer",
-            "role": "Admin"
+    # Add Cache-Control to prevent browser from caching old role status
+    token = request.cookies.get("auth_token")
+    if not token:
+        return {"authenticated": False}
+    
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        email = payload.get("sub", "").lower().strip()
+        
+        if not email:
+            print("AUTH ERROR: Token payload has no 'sub' claim")
+            return {"authenticated": False}
+
+        # Look up role from database
+        user = db.query(RegisteredUser).filter(RegisteredUser.email == email, RegisteredUser.is_active == 1).first()
+        
+        role = user.role if user else "User"
+        
+        # Secondary check: If email is in ADMIN_EMAILS list, promote to Admin
+        raw_admin_emails = os.getenv("ADMIN_EMAILS", "")
+        current_admin_emails = [e.strip().lower() for e in raw_admin_emails.split(",") if e.strip()]
+        
+        if email in current_admin_emails:
+            if role != "Admin":
+                print(f"AUTH: Promoting {email} to Admin based on ADMIN_EMAILS config.")
+            role = "Admin"
+            
+        print(f"AUTH CHECK: {email} -> Identified as {role}")
+        
+        return {
+            "authenticated": True,
+            "user": {
+                "email": email,
+                "name": payload.get("name"),
+                "role": role
+            }
         }
-    }
+    except Exception as e:
+        print(f"AUTH ERROR in /me for token: {str(e)}")
+        return {"authenticated": False}
 
 @router.get("/logout")
 async def logout(response: Response):
-    response = RedirectResponse(url="/cobot/")
+    base_url = os.getenv("FRONTEND_BASE_URL", "/cobot/")
+    response = RedirectResponse(url=base_url)
     response.delete_cookie("auth_token")
     return response
