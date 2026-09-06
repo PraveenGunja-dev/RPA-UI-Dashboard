@@ -55,10 +55,18 @@ msal_app = msal.ConfidentialClientApplication(
 
 @router.get("/login")
 async def login():
+    from urllib.parse import urlparse
+    app_base_url = os.getenv("APP_BASE_URL")
+    state_str = "cobot"
+    if app_base_url:
+        path = urlparse(app_base_url).path.strip("/")
+        if path:
+            state_str = path
+
     auth_url = msal_app.get_authorization_request_url(
         scopes=["User.Read"],
         redirect_uri=REDIRECT_URI,
-        state="cobot"
+        state=state_str
     )
     return RedirectResponse(auth_url)
 
