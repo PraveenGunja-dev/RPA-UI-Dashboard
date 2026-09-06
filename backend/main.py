@@ -157,14 +157,16 @@ async def serve_spa(full_path: str):
     if full_path.startswith("api"):
         return {"error": "API endpoint not found", "path": full_path}
     
-    # Clean the path: Remove 'cobot/' prefix if Nginx didn't strip it,
-    # or handle the path if Nginx already stripped it.
+    # Clean the path: Remove the prefix (e.g. /cobot/ or /cobot-testing/) if Nginx didn't strip it
+    base_url = os.getenv("FRONTEND_BASE_URL", "/cobot/").strip("/")
     target_path = full_path
-    if target_path.startswith("cobot"):
-        if target_path.startswith("cobot/"):
-            target_path = target_path.replace("cobot/", "", 1)
-        else:
-            target_path = target_path.replace("cobot", "", 1)
+    
+    # Try exact match with trailing slash first (e.g., 'cobot-testing/')
+    if target_path.startswith(f"{base_url}/"):
+        target_path = target_path.replace(f"{base_url}/", "", 1)
+    # Then exact match without trailing slash
+    elif target_path == base_url or target_path.startswith(f"{base_url}?"):
+        target_path = target_path.replace(base_url, "", 1)
     
     # Basic normalization
     if target_path.startswith("/"):
