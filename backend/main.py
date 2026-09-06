@@ -135,10 +135,12 @@ frontend_dist = (Path(__file__).parent / "../frontend/dist").resolve()
 print(f"Frontend dist path: {frontend_dist}")
 print(f"Assets exist: {(frontend_dist / 'assets').exists()}")
 
-# Mount /cobot/assets to match frontend requests
+# Mount /assets dynamically based on FRONTEND_BASE_URL
 assets_path = frontend_dist / "assets"
 if assets_path.exists():
-    app.mount("/cobot/assets", StaticFiles(directory=str(assets_path)), name="assets")
+    mount_prefix = f"/{os.getenv('FRONTEND_BASE_URL', '/cobot/').strip('/')}/assets"
+    app.mount(mount_prefix, StaticFiles(directory=str(assets_path)), name="assets")
+    print(f"Mounted static assets at {mount_prefix}")
 else:
     print(f"WARNING: Assets directory not found at {assets_path}")
 
