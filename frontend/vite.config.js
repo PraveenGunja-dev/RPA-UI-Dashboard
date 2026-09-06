@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/api': {
+      '/cobot/api': {
         target: 'http://localhost:3123',
         changeOrigin: true,
         secure: false,

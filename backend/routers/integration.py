@@ -197,21 +197,28 @@ async def get_daily_stats(db: Session = Depends(get_db)):
     runs = db.query(BotRun).filter(BotRun.report_date == latest_date_result).all()
     
     total_runs = len(runs)
-    successful_runs = sum(1 for r in runs if r.run_status and r.run_status.lower() == 'completed')
-    failed_runs = sum(1 for r in runs if r.run_status and r.run_status.lower() == 'failed')
-    
-    # Calculate daily hours saved based on UNIQUE bots and their frequency
-    # Count runs per bot
+    successful_runs = 0
+    failed_runs = 0
     bot_run_counts = {}
+    
     for run in runs:
-        if run.bot_id and run.run_status and 'completed' in str(run.run_status).lower():
-            bot_run_counts[run.bot_id] = bot_run_counts.get(run.bot_id, 0) + 1
+        if not run.run_status:
+            continue
+        
+        status_lower = str(run.run_status).lower()
+        if 'completed' in status_lower or 'success' in status_lower or 'pass' in status_lower:
+            successful_runs += 1
+            if run.bot_id:
+                bot_run_counts[run.bot_id] = bot_run_counts.get(run.bot_id, 0) + 1
+        elif 'fail' in status_lower:
+            failed_runs += 1
             
     total_hours_saved = 0
+    from utils import get_per_run_value
     for bot_id, runs_count in bot_run_counts.items():
         bot = db.query(Bot).get(bot_id)
         if bot:
-            total_hours_saved += calculate_realized_savings(bot, latest_date_result, runs_count)
+            total_hours_saved += get_per_run_value(bot) * runs_count
             
     unique_bots = len(bot_run_counts)
 

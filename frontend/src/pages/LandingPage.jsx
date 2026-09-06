@@ -254,8 +254,8 @@ const StatsDisplay = () => {
     // Helper for formatting hours (Rounded, Clean)
     const formatTime = (hours) => {
         if (!hours) return "0";
-        // Round to nearest integer for cleaner UI as requested
-        return `${Math.round(hours).toLocaleString()}`;
+        // Do not round to integer to ensure parity with charts
+        return Number(hours).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
     };
 
     // Calculate man hours saved (hours / 8) -> keep as NUMBER

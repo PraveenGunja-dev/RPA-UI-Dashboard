@@ -113,14 +113,14 @@ def start_scheduler():
     # Run Monthly Report on the 1st of every month at 09:00 AM IST
     scheduler.add_job(send_reports, 'cron', args=["Monthly"], day='1', hour=9, minute=0, timezone=ist_tz)
     
-    # Check for missing daily report data every day at 11:00 AM IST
-    scheduler.add_job(check_missing_data, 'cron', hour=11, minute=0, timezone=ist_tz)
+    # Check for missing daily report data every day at 09:00 AM IST
+    scheduler.add_job(check_missing_data, 'cron', hour=9, minute=0, timezone=ist_tz)
     
     scheduler.start()
     print("Schedulers started:")
     print("  - Weekly Performance Report: Every Friday at 17:00 IST")
     print("  - Monthly Performance Report: 1st of every month at 09:00 IST")
-    print("  - Missing Data Check: Every day at 11:00 IST")
+    print("  - Missing Data Check: Every day at 09:00 IST")
 
 @app.on_event("shutdown")
 def stop_scheduler():

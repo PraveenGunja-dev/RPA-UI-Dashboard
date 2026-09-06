@@ -319,3 +319,83 @@ class SharePointService:
                     time.sleep(wait_time)
                 else:
                     raise Exception(f"Error downloading file {file_path}: {str(e)}")
+
+    def upload_file(self, local_file_path: str, remote_filename: str = None) -> bool:
+        """
+        Upload a local file to the configured SharePoint target folder
+        via Microsoft Graph API.
+
+        Args:
+            local_file_path: Absolute path to the local file.
+            remote_filename: Optional override for the filename in SharePoint.
+                             Defaults to the local file's basename.
+
+        Returns:
+            True on success, False on failure.
+        """
+        if not os.path.isfile(local_file_path):
+            print(f"Upload error: Local file not found: {local_file_path}")
+            return False
+
+        filename = remote_filename or os.path.basename(local_file_path)
+
+        try:
+            drive_id, rel_path = self._resolve_drive_and_path(self.folder_path)
+
+            # Build the upload URL:
+            #   PUT /drives/{drive-id}/root:/{folder}/{filename}:/content
+            encoded_parts = [
+                urllib.parse.quote(s) for s in rel_path.split("/") if s
+            ]
+            if encoded_parts:
+                target = "/".join(encoded_parts) + "/" + urllib.parse.quote(filename)
+            else:
+                target = urllib.parse.quote(filename)
+
+            url = (
+                f"https://graph.microsoft.com/v1.0/sites/{self.site_id}"
+                f"/drives/{drive_id}/root:/{target}:/content"
+            )
+
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/octet-stream",
+            }
+
+            with open(local_file_path, "rb") as f:
+                data = f.read()
+
+            file_size_mb = len(data) / (1024 * 1024)
+            print(f"Uploading {filename} to SharePoint ({file_size_mb:.2f} MB)...")
+
+            # Retry logic for transient errors
+            max_retries = 3
+            base_delay = 5
+            for attempt in range(max_retries + 1):
+                response = self.session.put(url, headers=headers, data=data)
+
+                if response.status_code in (200, 201):
+                    print(f"SharePoint upload successful: {filename}")
+                    return True
+
+                if response.status_code in (429, 503, 504) and attempt < max_retries:
+                    retry_after = response.headers.get("Retry-After")
+                    wait = int(retry_after) if retry_after else base_delay * (2 ** attempt)
+                    print(
+                        f"SharePoint HTTP {response.status_code} on upload. "
+                        f"Retry {attempt + 1}/{max_retries} after {wait}s..."
+                    )
+                    time.sleep(wait)
+                    continue
+
+                print(
+                    f"SharePoint upload failed: HTTP {response.status_code} — "
+                    f"{response.text[:500]}"
+                )
+                return False
+
+        except Exception as e:
+            print(f"SharePoint upload error: {str(e)}")
+            return False
+
+        return False
