@@ -485,10 +485,14 @@ async def get_daily_trend(department_id: int = None, db: Session = Depends(get_d
     else:
         all_bots = db.query(Bot).all()
         
-    from utils import get_per_run_value
+    from utils import calculate_realized_savings
     
-    # Pre-fetch runs
-    all_runs_rows = db.query(BotRun.bot_id, BotRun.report_date, BotRun.run_status).filter(
+    bot_map = {b.id: b for b in all_bots}
+    bot_ids = list(bot_map.keys())
+    
+    # Pre-fetch all successful runs
+    all_runs_rows = db.query(BotRun).filter(
+        BotRun.bot_id.in_(bot_ids),
         or_(
             BotRun.run_status.ilike('%completed%'),
             BotRun.run_status.ilike('%success%'),
@@ -496,7 +500,8 @@ async def get_daily_trend(department_id: int = None, db: Session = Depends(get_d
         )
     ).all()
     
-    bot_runs_map = {}
+    # Group runs by date -> bot_id -> count
+    date_bot_runs = {}
     for r in all_runs_rows:
         if not r.report_date: continue
         try:
@@ -505,36 +510,29 @@ async def get_daily_trend(department_id: int = None, db: Session = Depends(get_d
             try: dt = datetime.strptime(r.report_date, '%d-%m-%Y').date()
             except ValueError: continue
         
-        if r.bot_id not in bot_runs_map:
-            bot_runs_map[r.bot_id] = {}
-        bot_runs_map[r.bot_id][dt] = bot_runs_map[r.bot_id].get(dt, 0) + 1
-
-    bot_meta = []
-    for bot in all_bots:
-        per_run = get_per_run_value(bot)
-        bot_meta.append({
-            'id': bot.id,
-            'per_run': per_run,
-            'runs': bot_runs_map.get(bot.id, {})
-        })
+        if dt not in date_bot_runs:
+            date_bot_runs[dt] = {}
+        date_bot_runs[dt][r.bot_id] = date_bot_runs[dt].get(r.bot_id, 0) + 1
 
     trend_data = []
     for i in range(29, -1, -1):
         target_date = (ist_now - timedelta(days=i)).date()
+        target_date_str = target_date.strftime('%Y-%m-%d')
         
         total_savings = 0.0
         total_runs = 0
         bots_active_today = 0
         
-        for b in bot_meta:
-            runs_today = b['runs'].get(target_date, 0)
-            if runs_today > 0:
-                total_runs += runs_today
-                total_savings += runs_today * b['per_run']
+        bot_runs_today = date_bot_runs.get(target_date, {})
+        for bot_id, runs_count in bot_runs_today.items():
+            bot = bot_map.get(bot_id)
+            if bot:
+                total_runs += runs_count
+                total_savings += calculate_realized_savings(bot, target_date_str, runs_count)
                 bots_active_today += 1
                 
         trend_data.append({
-            "date": target_date.strftime('%Y-%m-%d'),
+            "date": target_date_str,
             "label": target_date.strftime('%d %b'),
             "savings": round(total_savings, 2),
             "runs": total_runs,
@@ -542,3 +540,4 @@ async def get_daily_trend(department_id: int = None, db: Session = Depends(get_d
         })
         
     return trend_data
+
