@@ -505,3 +505,171 @@ def send_performance_report_notification(admin_emails, stats, report_type, perio
     except Exception as e:
         print(f"MAIL ERROR: Failed to send {report_type} report: {str(e)}")
         return False
+
+
+def send_bot_status_report_notification(to_emails, cc_emails, summary, attachment_path=None, attachment_name=None):
+    """
+    Sends the twice-daily Bot Status Report (services/bot_status_report.py)
+    with the workbook attached.
+    summary = services.bot_status_report.summarize_report(path)
+    Returns (success: bool, error: str or None, subject: str).
+    """
+    import html
+    from email.mime.application import MIMEApplication
+
+    title = summary.get("title") or "Bot Status Report"
+    subject = f"CoBot {title}"
+    if not to_emails and not cc_emails:
+        return False, "No recipients", subject
+
+    total = summary.get("total_runs", 0)
+    status_counts = summary.get("status_counts", {})
+    completed = status_counts.get("Completed", 0)
+    not_completed = total - completed
+    success_rate = f"{(completed / total * 100):.1f}%" if total else "0%"
+    failed_runs = summary.get("failed_runs", [])
+
+    def esc(v):
+        return html.escape(str(v or ""))
+
+    status_rows = ""
+    for i, (status, count) in enumerate(sorted(status_counts.items(), key=lambda x: -x[1])):
+        bg = '#f9f9f9' if i % 2 else '#ffffff'
+        color = '#389e0d' if status == "Completed" else '#cf1322'
+        status_rows += f'''
+        <tr style="background-color: {bg};">
+            <td style="padding: 8px 10px; border: 1px solid #eee; color: {color};"><strong>{esc(status)}</strong></td>
+            <td style="padding: 8px 10px; border: 1px solid #eee; text-align: center;">{count}</td>
+        </tr>'''
+
+    # One row per bot + status + reason, so a bot failing repeatedly for the
+    # same reason doesn't flood the email
+    groups = {}
+    for run in failed_runs:
+        key = (run.get("automation_name") or "", run.get("status") or "", run.get("remarks") or "")
+        g = groups.setdefault(key, {"count": 0, "last": ""})
+        g["count"] += 1
+        g["last"] = max(g["last"], str(run.get("ended_on") or ""))
+    grouped = sorted(groups.items(), key=lambda kv: (-kv[1]["count"], kv[0]))
+
+    max_rows = 30
+    failed_rows = ""
+    for i, ((bot, status, remarks), g) in enumerate(grouped[:max_rows]):
+        bg = '#fff1f0' if i % 2 == 0 else '#ffffff'
+        cell = 'padding: 8px 10px; border: 1px solid #eee; vertical-align: top;'
+        failed_rows += f'''
+        <tr style="background-color: {bg};">
+            <td style="{cell} word-break: break-word;">{esc(bot)}</td>
+            <td style="{cell} color: #cf1322;"><strong>{esc(status)}</strong></td>
+            <td style="{cell} text-align: center;">{g["count"]}</td>
+            <td style="{cell} font-size: 12px;">{esc(g["last"].replace(" IST", ""))}</td>
+            <td style="{cell} font-size: 12px; word-break: break-word;">{esc(remarks)}</td>
+        </tr>'''
+    if not failed_rows:
+        failed_rows = '<tr><td colspan="5" style="padding: 10px; text-align: center; color: #389e0d;">All runs completed successfully</td></tr>'
+    more_note = ""
+    if len(grouped) > max_rows:
+        more_note = (f'<p style="font-size: 12px; color: #777;">Showing {max_rows} of {len(grouped)} issues. '
+                     'See the attached report for the full list.</p>')
+
+    override_note = ""
+    if summary.get("overridden"):
+        override_note = (f'<p style="font-size: 12px; color: #777;">{summary["overridden"]} run(s) of AGEL014 / AUC172 '
+                         'were marked Completed as per the CoBot rule. The original Control Room status is in the '
+                         'Remarks column of the attached report.</p>')
+
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_FROM
+    msg['To'] = ", ".join(to_emails)
+    if cc_emails:
+        msg['Cc'] = ", ".join(cc_emails)
+    msg['Subject'] = subject
+
+    body = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0;">
+    <div style="max-width: 750px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: #fff;">
+      <div style="background-color: #0b74b0; color: white; padding: 20px; text-align: center;">
+        <h1 style="margin: 0; font-size: 22px;">{esc(title)}</h1>
+        <p style="margin: 5px 0 0; font-size: 13px; opacity: 0.9;">{esc(summary.get("subtitle"))}</p>
+      </div>
+
+      <div style="padding: 20px;">
+        <p>Hello,</p>
+        <p>Please find the latest CoBot Bot Status Report attached. Summary for this window:</p>
+
+        <table width="100%" style="margin: 20px 0; text-align: center; border-collapse: separate; border-spacing: 8px 0;">
+          <tr>
+            <td style="background: #e6f7ff; border: 1px solid #91d5ff; border-radius: 8px; padding: 12px; width: 25%;">
+              <h3 style="margin: 0; color: #0050b3; font-size: 24px;">{total:,}</h3>
+              <p style="margin: 5px 0 0; color: #096dd9; font-size: 12px; font-weight: bold;">Total Runs</p>
+            </td>
+            <td style="background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 8px; padding: 12px; width: 25%;">
+              <h3 style="margin: 0; color: #389e0d; font-size: 24px;">{completed:,}</h3>
+              <p style="margin: 5px 0 0; color: #52c41a; font-size: 12px; font-weight: bold;">Completed</p>
+            </td>
+            <td style="background: #fff1f0; border: 1px solid #ffa39e; border-radius: 8px; padding: 12px; width: 25%;">
+              <h3 style="margin: 0; color: #cf1322; font-size: 24px;">{not_completed:,}</h3>
+              <p style="margin: 5px 0 0; color: #f5222d; font-size: 12px; font-weight: bold;">Failed / Stopped</p>
+            </td>
+            <td style="background: #f9f0ff; border: 1px solid #d3adf7; border-radius: 8px; padding: 12px; width: 25%;">
+              <h3 style="margin: 0; color: #531dab; font-size: 24px;">{success_rate}</h3>
+              <p style="margin: 5px 0 0; color: #722ed1; font-size: 12px; font-weight: bold;">Success Rate</p>
+            </td>
+          </tr>
+        </table>
+
+        <h3 style="color: #0b74b0; border-bottom: 2px solid #eee; padding-bottom: 5px;">Runs by Status</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+          <tr style="background-color: #0b74b0; color: white;">
+            <th style="padding: 8px 10px; border: 1px solid #eee; text-align: left;">Status</th>
+            <th style="padding: 8px 10px; border: 1px solid #eee; text-align: center;">Runs</th>
+          </tr>
+          {status_rows}
+        </table>
+
+        <h3 style="color: #cf1322; border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 30px;">Failed / Stopped Runs</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed;">
+          <tr style="background-color: #cf1322; color: white;">
+            <th style="width: 26%; padding: 8px 10px; border: 1px solid #eee; text-align: left;">Bot</th>
+            <th style="width: 13%; padding: 8px 10px; border: 1px solid #eee; text-align: left;">Status</th>
+            <th style="width: 8%; padding: 8px 10px; border: 1px solid #eee; text-align: center;">Runs</th>
+            <th style="width: 15%; padding: 8px 10px; border: 1px solid #eee; text-align: left;">Last Ended (IST)</th>
+            <th style="width: 38%; padding: 8px 10px; border: 1px solid #eee; text-align: left;">Remarks</th>
+          </tr>
+          {failed_rows}
+        </table>
+        {more_note}
+        {override_note}
+
+        <div style="text-align: center; margin-top: 30px;">
+          <a href="{APP_BASE_URL}/home" style="background-color: #0b74b0; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Dashboard</a>
+        </div>
+      </div>
+      <div style="background-color: #f4f4f4; color: #777; padding: 15px; text-align: center; font-size: 12px;">
+        Automated Report via AGEL Co-Bot Console Platform
+      </div>
+    </div>
+    </body>
+    </html>
+    """
+    msg.attach(MIMEText(body, 'html'))
+
+    if attachment_path and os.path.exists(attachment_path):
+        name = attachment_name or os.path.basename(attachment_path)
+        with open(attachment_path, "rb") as f:
+            part = MIMEApplication(f.read(), Name=name)
+        part['Content-Disposition'] = f'attachment; filename="{name}"'
+        msg.attach(part)
+
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=60) as server:
+            if SMTP_PASSWORD:
+                server.starttls()
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(msg)
+        print(f"MAIL SUCCESS: {subject} sent to {len(to_emails)} (+{len(cc_emails or [])} cc)")
+        return True, None, subject
+    except Exception as e:
+        print(f"MAIL ERROR: Failed to send {subject}: {str(e)}")
+        return False, str(e), subject

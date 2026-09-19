@@ -1,14 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header, Request
 from sqlalchemy.orm import Session
 from database import get_db
-from services.sharepoint_service import SharePointService
-from services.excel_parser import parse_daily_report
+from services.sharepoint_service import SharePointService, SHAREPOINT_AA_FOLDER
+from services.excel_parser import parse_aa_report, ingest_manual_file
 from models import BotRun, FileLog, Bot
 from sqlalchemy import func
+from contextlib import contextmanager
+from typing import Optional
+import asyncio
+import hmac
 import os
+import re
 import shutil
 import calendar
-from datetime import datetime, timedelta
+import time
+from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import or_
 from utils import get_per_run_value, calculate_fte_savings, calculate_realized_savings
@@ -20,7 +26,221 @@ router = APIRouter(
     tags=["integration"]
 )
 
-async def run_sync_sharepoint(db: Session):
+def _archive_file(temp_path: str, filename: str) -> str:
+    """Copy a downloaded file into uploads/archive; returns the path relative to backend."""
+    archive_dir = os.path.join(os.getcwd(), "uploads", "archive")
+    os.makedirs(archive_dir, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    archive_filename = f"{timestamp}_{filename}"
+    shutil.copy2(temp_path, os.path.join(archive_dir, archive_filename))
+    return f"uploads/archive/{archive_filename}"
+
+
+def _sync_aa_folder(sp_service: SharePointService, db: Session):
+    """
+    Ingest Automation Anywhere exports (services/aa_service.py) from their
+    dedicated SharePoint folder. Every .xlsx in that folder is treated as an
+    AA export; the run dates come from the file contents, not the filename.
+    A file changed in SharePoint after it was processed (e.g. a re-run slot)
+    is processed again. Each new report is emailed once (services/report_mailer.py).
+    Returns (processed, skipped, errors, files_found).
+    """
+    from services.report_mailer import auto_email_report, retry_failed_report_emails
+
+    try:
+        all_files = sp_service.list_files(folder_path=SHAREPOINT_AA_FOLDER)
+    except Exception as e:
+        print(f"SYNC ERROR: AA folder list failed ({SHAREPOINT_AA_FOLDER}): {str(e)}")
+        return 0, 0, [f"AA folder '{SHAREPOINT_AA_FOLDER}': {str(e)}"], 0
+
+    aa_files = [f for f in all_files if f["Name"].lower().endswith(".xlsx")]
+    aa_files.sort(key=lambda x: x["TimeLastModified"])
+
+    processed_count = 0
+    skipped_count = 0
+    errors_summary = []
+
+    # Retry earlier failed sends first, so a report that fails in this run
+    # isn't immediately retried (each automatic attempt counts)
+    try:
+        for email_log in retry_failed_report_emails(db):
+            if email_log.status == "Failed":
+                errors_summary.append(f"{email_log.report_name}: email retry failed: {email_log.error_message}")
+    except Exception as e:
+        db.rollback()
+        errors_summary.append(f"Email retry: {str(e)}")
+
+    for file_info in aa_files:
+        filename = file_info["Name"]
+
+        # Row-level errors won't change unless the file does, so a
+        # Partial_Success file is also only reprocessed when modified.
+        last_success = db.query(FileLog).filter(
+            FileLog.filename == filename,
+            FileLog.status.in_(["Success", "Partial_Success"])
+        ).order_by(FileLog.id.desc()).first()
+        if last_success and not _modified_since(file_info["TimeLastModified"], last_success.upload_date):
+            skipped_count += 1
+            continue
+
+        try:
+            temp_path = sp_service.download_file(file_info["ServerRelativeUrl"], save_dir="uploads")
+            result = parse_aa_report(temp_path, db)
+            rel_archive_path = _archive_file(temp_path, filename)
+
+            errors = result["errors"]
+            if not errors:
+                status = "Success"
+            elif result["runs_inserted"] or result["duplicates_skipped"]:
+                status = "Partial_Success"
+            else:
+                status = "Failed"
+
+            ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+            db.add(FileLog(
+                filename=filename,
+                upload_date=ist_now.isoformat(),
+                file_date=result["report_dates"][-1] if result["report_dates"] else "Unknown",
+                processed_count=result["runs_inserted"],
+                unique_bots_count=result["unique_bots"],
+                hours_saved_estimate=result["hours_saved"],
+                file_path=rel_archive_path,
+                status=status,
+                error_message="; ".join(errors) if errors else None
+            ))
+            db.commit()
+
+            processed_count += 1
+            print(f"SYNC: AA file {filename}: {result['runs_inserted']} runs added, "
+                  f"{result['duplicates_skipped']} already present, dates {result['report_dates']}")
+
+            if os.path.exists(temp_path):
+                try: os.remove(temp_path)
+                except: pass
+
+            if status != "Failed":
+                email_log = auto_email_report(db, filename, rel_archive_path,
+                                              result["report_dates"][-1] if result["report_dates"] else None,
+                                              file_info["TimeLastModified"])
+                if email_log and email_log.status == "Failed":
+                    errors_summary.append(f"{filename}: email failed: {email_log.error_message}")
+
+        except Exception as e:
+            db.rollback()
+            errors_summary.append(f"{filename}: {str(e)}")
+
+    return processed_count, skipped_count, errors_summary, len(aa_files)
+
+
+def _modified_since(sharepoint_modified: str, processed_at_ist: str) -> bool:
+    """True if the SharePoint file changed after we processed it."""
+    try:
+        modified = datetime.fromisoformat(sharepoint_modified.replace("Z", "+00:00"))
+        if modified.tzinfo:
+            modified = modified.astimezone(timezone.utc).replace(tzinfo=None)
+        processed_utc = datetime.fromisoformat(processed_at_ist) - timedelta(hours=5, minutes=30)
+        return modified > processed_utc
+    except (TypeError, ValueError, AttributeError):
+        return False
+
+
+def _date_from_filename(filename: str):
+    """'3 Sep Control Room Dump.xlsx' / '30Jan Bot Status Report.xlsx' -> 'YYYY-MM-DD' or None."""
+    match = re.search(r"(\d{1,2})\s*([A-Za-z]{3})", filename, re.IGNORECASE)
+    if not match:
+        return None
+    months = {
+        'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+        'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+    }
+    month = months.get(match.group(2).lower())
+    if not month:
+        return None
+    ist_today = (datetime.utcnow() + timedelta(hours=5, minutes=30)).date()
+    try:
+        dated = datetime(ist_today.year, month, int(match.group(1))).date()
+    except ValueError:
+        return None
+    # A December file processed in January belongs to last year
+    if dated > ist_today + timedelta(days=1):
+        dated = dated.replace(year=dated.year - 1)
+    return dated.strftime('%Y-%m-%d')
+
+
+# How long a triggered sync waits for a running one (it must not be skipped:
+# the running sync may have listed SharePoint before the new file arrived)
+TRIGGER_SYNC_WAIT_SECONDS = 10 * 60
+
+SYNC_LOCK_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              "uploads", ".sharepoint_sync.lock")
+# A lock older than this is from a crashed sync and is taken over
+STALE_SYNC_LOCK_SECONDS = 30 * 60
+
+
+class SyncBusy(Exception):
+    """Another SharePoint sync is running."""
+
+
+@contextmanager
+def _sync_lock(wait_seconds: float):
+    """
+    Only one sync at a time, across the web server and the scheduled CLI
+    (a lock file), so concurrent syncs can't store or email a report twice.
+    """
+    os.makedirs(os.path.dirname(SYNC_LOCK_PATH), exist_ok=True)
+    deadline = time.monotonic() + wait_seconds
+    while True:
+        try:
+            fd = os.open(SYNC_LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, f"{os.getpid()} {datetime.now().isoformat()}".encode())
+            os.close(fd)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - os.path.getmtime(SYNC_LOCK_PATH) > STALE_SYNC_LOCK_SECONDS:
+                    os.remove(SYNC_LOCK_PATH)
+                    continue
+            except FileNotFoundError:
+                continue
+            if time.monotonic() >= deadline:
+                raise SyncBusy()
+            time.sleep(2)
+    try:
+        yield
+    finally:
+        try:
+            os.remove(SYNC_LOCK_PATH)
+        except FileNotFoundError:
+            pass
+
+
+async def run_sync_sharepoint(db: Session, wait_seconds: float = 0):
+    """
+    Downloads and processes pending SharePoint files.
+    If another sync is running, waits up to wait_seconds for it to finish,
+    then returns status "busy". Waiting sleeps the calling thread, so only
+    pass wait_seconds from a worker thread or a separate process.
+    """
+    try:
+        with _sync_lock(wait_seconds):
+            return await _run_sync_sharepoint_unlocked(db)
+    except SyncBusy:
+        print("SYNC: Skipped, another SharePoint sync is already running.")
+        return {"status": "busy", "message": "Another SharePoint sync is already running. Try again in a minute."}
+
+
+def run_sync_sharepoint_in_thread(wait_seconds: float = 0) -> dict:
+    """Run a sync with its own DB session (for background tasks / threads)."""
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        return asyncio.run(run_sync_sharepoint(db, wait_seconds))
+    finally:
+        db.close()
+
+
+async def _run_sync_sharepoint_unlocked(db: Session):
     """
     Downloads and processes pending SharePoint files.
     This internal function can be called by routers or background tasks.
@@ -43,110 +263,79 @@ async def run_sync_sharepoint(db: Session):
                 "status report" in f["Name"].lower()) 
             and f["Name"].endswith(".xlsx")
         ]
-        
-        if not dump_files:
-             return {"status": "error", "message": "No 'Dump' or 'Status Report' files found in SharePoint."}
 
         # Sort by Modification time (chronological)
         dump_files.sort(key=lambda x: x["TimeLastModified"], reverse=False)
 
-        processed_count = 0
-        skipped_count = 0
-        errors_summary = []
-        
-        # 3. Iterate and Process
+        # 3. Automation Anywhere reports first, so the manual files below only
+        #    fill runs the AA sync missed
+        processed_count, skipped_count, errors_summary, aa_found = _sync_aa_folder(sp_service, db)
+
+        # 4. Manually kept files (backup for days the AA sync failed)
         for file_info in dump_files:
             filename = file_info["Name"]
-            
-            # Check if already processed successfully
-            existing_log = db.query(FileLog).filter(
+
+            # Reprocess only if the file changed since (the team may update it)
+            last_log = db.query(FileLog).filter(
                 FileLog.filename == filename,
-                FileLog.status == "Success"
-            ).first()
-            
-            if existing_log:
+                FileLog.status.in_(["Success", "Partial_Success"])
+            ).order_by(FileLog.id.desc()).first()
+            if last_log and not _modified_since(file_info["TimeLastModified"], last_log.upload_date):
                 skipped_count += 1
                 continue
-                
+
             # --- Process File ---
             try:
-                # Download
                 temp_path = sp_service.download_file(file_info["ServerRelativeUrl"], save_dir="uploads")
-                
-                # Extract Date logic
-                report_date = None
-                import re
-                
-                # Pattern for "30Jan" or "28Feb"
-                match = re.search(r"(\d{1,2})\s*([A-Za-z]{3})", filename, re.IGNORECASE)
-                if match:
-                    day = int(match.group(1))
-                    month_str = match.group(2).lower()
-                    
-                    months = {
-                        'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-                        'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
-                    }
-                    
-                    if month_str in months:
-                        month = months[month_str]
-                        current_year = datetime.now().year
-                        try:
-                            extracted_date = datetime(current_year, month, day)
-                            report_date = extracted_date.strftime('%Y-%m-%d')
-                        except ValueError: pass
-                
-                # Parse
-                parse_result = parse_daily_report(temp_path, db, report_date=report_date)
-                
-                # Robust unpacking
-                if isinstance(parse_result, tuple) and len(parse_result) >= 4:
-                    runs_processed = parse_result[0]
-                    unique_bots_count = parse_result[1]
-                    hours_saved = parse_result[2]
-                    errors = parse_result[3]
-                else:
-                    msg = f"Parser returned unexpected format: {type(parse_result)}"
-                    errors_summary.append(f"{filename}: {msg}")
-                    runs_processed, unique_bots_count, hours_saved = 0, 0, 0.0
-                    errors = []
+                report_date = _date_from_filename(filename)
 
-                archive_dir = os.path.join(os.getcwd(), "uploads", "archive")
-                os.makedirs(archive_dir, exist_ok=True)
-                
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                archive_filename = f"{timestamp}_{filename}"
-                archive_path = os.path.join(archive_dir, archive_filename)
-                shutil.copy2(temp_path, archive_path)
-                
-                rel_archive_path = f"uploads/archive/{archive_filename}"
-                
-                # Log
+                result = ingest_manual_file(temp_path, db)
+                rel_archive_path = _archive_file(temp_path, filename)
+
+                errors = result["errors"]
+                if not errors:
+                    status = "Success"
+                elif result["runs_inserted"] or result["duplicates_skipped"]:
+                    status = "Partial_Success"
+                else:
+                    status = "Failed"
+
                 ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
-                file_log = FileLog(
+                db.add(FileLog(
                     filename=filename,
                     upload_date=ist_now.isoformat(),
-                    file_date=report_date or "Unknown",
-                    processed_count=runs_processed,
-                    unique_bots_count=unique_bots_count,
-                    hours_saved_estimate=hours_saved,
+                    file_date=report_date or (result["report_dates"][-1] if result["report_dates"] else "Unknown"),
+                    processed_count=result["runs_inserted"],
+                    unique_bots_count=result["unique_bots"],
+                    hours_saved_estimate=result["hours_saved"],
                     file_path=rel_archive_path,
-                    status="Partial_Success" if errors else "Success",
+                    status=status,
                     error_message="; ".join(errors) if errors else None
-                )
-                db.add(file_log)
+                ))
                 db.commit()
-                
+
                 processed_count += 1
-                
+                print(f"SYNC: Manual file {filename}: {result['runs_inserted']} missing runs added, "
+                      f"{result['duplicates_skipped']} already present, "
+                      f"{result['other_devices_skipped']} from other devices ignored")
+
                 # Cleanup
                 if os.path.exists(temp_path):
                     try: os.remove(temp_path)
                     except: pass
-                        
+
             except Exception as e:
+                db.rollback()
                 errors_summary.append(f"{filename}: {str(e)}")
-                
+
+        if not dump_files and not aa_found:
+            return {
+                "status": "error",
+                "message": "No 'Dump' or 'Status Report' files found in SharePoint, "
+                           "and no Automation Anywhere files found in the AA folder.",
+                "details": {"errors": errors_summary}
+            }
+
         return {
             "status": "success",
             "message": f"Sync completed. Processed: {processed_count}, Skipped: {skipped_count}, Errors: {len(errors_summary)}",
@@ -161,19 +350,45 @@ async def run_sync_sharepoint(db: Session):
         print(f"SYNC EXCEPTION: {str(e)}")
         return {"status": "error", "message": str(e)}
 
+def _require_admin(request: Request, db: Session = Depends(get_db)) -> str:
+    # Imported here: routers.auth imports this module
+    from .auth import require_admin
+    return require_admin(request, db)
+
+
 @router.post("/sync-sharepoint")
-async def sync_sharepoint_data(db: Session = Depends(get_db)):
+async def sync_sharepoint_data(db: Session = Depends(get_db), current_user: str = Depends(_require_admin)):
     """
     Triggers synchronization with SharePoint via the POST endpoint.
     Downloads ALL pending dump files, parses them, archives them, and logs the process.
     Skips files that have already been successfully processed.
     """
     result = await run_sync_sharepoint(db)
-    
+
+    if result.get("status") == "busy":
+        raise HTTPException(status_code=409, detail=result.get("message"))
     if result.get("status") == "error":
         raise HTTPException(status_code=500, detail=result.get("message"))
-    
+
     return result
+
+
+@router.post("/trigger-sync", status_code=202)
+def trigger_sync(background_tasks: BackgroundTasks, x_sync_token: Optional[str] = Header(None)):
+    """
+    Called by run_aa_sync.py right after it uploads a report, so the runs
+    reach the dashboard (and the report is emailed) immediately. Needs the
+    X-Sync-Token header to match SYNC_TRIGGER_TOKEN. If a sync is already
+    running, this one waits for it and then runs, so the new file is picked up.
+    """
+    expected = os.getenv("SYNC_TRIGGER_TOKEN", "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="SYNC_TRIGGER_TOKEN is not configured on the server")
+    if not x_sync_token or not hmac.compare_digest(x_sync_token, expected):
+        raise HTTPException(status_code=401, detail="Invalid sync token")
+
+    background_tasks.add_task(run_sync_sharepoint_in_thread, TRIGGER_SYNC_WAIT_SECONDS)
+    return {"status": "accepted", "message": "Sync started"}
 
 
 @router.get("/daily-stats")

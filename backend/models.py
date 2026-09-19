@@ -113,6 +113,22 @@ class RegisteredUser(Base):
     is_active = Column(Integer, default=1) # 1 for True, 0 for False
     created_at = Column(DateTime)
 
+class EmailLog(Base):
+    __tablename__ = "email_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    report_name = Column(String(255), index=True)  # Report file name
+    report_date = Column(String(50))  # Latest run date in the report (IST)
+    subject = Column(String(500))
+    recipients = Column(Text)  # To, comma-separated
+    cc = Column(Text)  # Cc, comma-separated
+    status = Column(String(50))  # Sent, Failed, Skipped
+    error_message = Column(Text)
+    file_path = Column(String(500))  # Archived report, relative to backend
+    sent_at = Column(String(50))  # When the attempt was made (IST)
+    triggered_by = Column(String(255))  # "Auto" or the admin who resent it
+
+
 class AuditLog(Base):
     __tablename__ = "audit_log"
     

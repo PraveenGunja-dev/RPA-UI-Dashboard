@@ -2,14 +2,20 @@
 Automation Anywhere Control Room API Service.
 
 Connects to the AA Control Room, retrieves bot execution records for a
-configurable time window, filters to target devices, and exports an Excel
-file in the exact format the dashboard's SharePoint sync expects.
+time window, filters to target devices, and exports the Bot Status Report
+workbook (services/bot_status_report.py) that the dashboard's SharePoint
+sync ingests and emails.
+
+Reports cover fixed 12-hour slots so the two daily files never overlap:
+    Morning  18:00 (previous day) -> 06:00 IST
+    Evening  06:00 -> 18:00 IST
 
 Usage (standalone):
-    python -m services.aa_service            # last 12 hours
-    python -m services.aa_service --hours 24 # last 24 hours
+    python -m services.aa_service                                 # latest completed slot
+    python -m services.aa_service --date 2026-09-19 --slot evening
+    python -m services.aa_service --hours 24                      # rolling window
 
-When imported, call  aa_sync(hours=12)  to run the full pipeline.
+When imported, call  aa_sync()  to run the full pipeline.
 """
 
 import os
@@ -22,9 +28,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
 import requests
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, RetryError
 from requests.exceptions import RequestException
 from dotenv import load_dotenv
 
@@ -82,6 +86,14 @@ TARGET_DEVICES = [
 # Output directory for exports
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "uploads" / "aa_sync"
 
+# After uploading, ask the dashboard server to sync right away so the runs
+# appear (and the report is emailed) without waiting for the backup schedule.
+SYNC_TRIGGER_TOKEN = os.getenv("SYNC_TRIGGER_TOKEN", "")
+DASHBOARD_SYNC_URL = os.getenv(
+    "DASHBOARD_SYNC_URL",
+    f"{os.getenv('APP_BASE_URL', 'https://aegis.adani.com/cobot').rstrip('/')}/api/integration/trigger-sync",
+)
+
 
 # ===========================================================================
 # Authentication
@@ -100,16 +112,15 @@ def _authenticate() -> str:
     Authenticates with Automation Anywhere Control Room.
     Returns the bearer token string.
     """
-    if not AA_USERNAME or not AA_PASSWORD or not AA_API_KEY:
+    if not AA_USERNAME or not AA_PASSWORD:
         raise AuthenticationError(
-            "Missing AA credentials. Set AA_USERNAME, AA_PASSWORD, AA_API_KEY in .env"
+            "Missing AA credentials. Set AA_USERNAME, AA_PASSWORD in .env"
         )
 
     url = f"{AA_BASE_URL}/v2/authentication"
     payload = {
         "username": AA_USERNAME,
         "password": AA_PASSWORD,
-        "apikey": AA_API_KEY,
         "multipleLogin": False,
     }
 
@@ -210,7 +221,9 @@ def _get_all_activities(token: str, start_time: str,
             if end_dt and end_dt < start_time:
                 out_of_bounds = True
                 continue
-            if item.get("deviceName") in target_set and end_dt <= end_time:
+            # End is exclusive so a run ending exactly on a slot boundary is
+            # reported in one slot only.
+            if item.get("deviceName") in target_set and end_dt < end_time:
                 filtered.append(item)
 
         if out_of_bounds:
@@ -232,90 +245,133 @@ def _get_all_activities(token: str, start_time: str,
 
 
 # ===========================================================================
-# Excel Export  (SharePoint-compatible format)
+# Report windows
 # ===========================================================================
-def _export_excel(records: List[Dict[str, Any]], start_time: str,
-                  end_time: str) -> Optional[str]:
-    """
-    Generates a formatted .xlsx file with the exact column headers the
-    backend's daily-report parser (excel_parser.py) expects, so it can be
-    dropped straight into SharePoint.
+IST = timezone(timedelta(hours=5, minutes=30))
+SLOT_END_HOURS = {"Morning": 6, "Evening": 18}
+SLOT_HOURS = 12
 
-    Returns the absolute path to the generated Excel file, or None on failure.
+
+def _utc_str(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _parse_cli_datetime(value: str) -> datetime:
+    """ISO-8601; a value without a timezone is treated as UTC."""
+    dt = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def resolve_window(hours: int = None, start: str = None, end: str = None,
+                   date: str = None, slot: str = None,
+                   now: datetime = None) -> Dict[str, str]:
+    """
+    Work out the report window. Returns start/end (UTC API strings), the
+    report title, file stem and a human-readable IST window.
+
+    Default: the latest completed slot (Morning ends 06:00 IST, Evening
+    ends 18:00 IST), so a task that starts late still reports the right slot.
+    """
+    now = (now or datetime.now(timezone.utc)).astimezone(IST)
+
+    if start or end or hours:
+        if start and end:
+            start_dt, end_dt = _parse_cli_datetime(start), _parse_cli_datetime(end)
+        elif hours:
+            end_dt = now
+            start_dt = now - timedelta(hours=hours)
+        else:
+            raise ValueError("Pass both --start and --end, or --hours.")
+        s, e = start_dt.astimezone(IST), end_dt.astimezone(IST)
+        return {
+            "start": _utc_str(start_dt),
+            "end": _utc_str(end_dt),
+            "title": f"Bot Status Report - {s:%d %b %Y %H:%M} to {e:%d %b %Y %H:%M} IST",
+            "file_stem": f"{s:%d %b %Y %H%M} to {e:%d %b %Y %H%M} Bot Status Report",
+            "window_text": f"{s:%d %b %Y %H:%M} - {e:%d %b %Y %H:%M} IST",
+        }
+
+    if date:
+        if not slot:
+            raise ValueError("--date needs --slot morning|evening.")
+        day = datetime.strptime(date, "%Y-%m-%d")
+        slot_name = slot.capitalize()
+        boundary = datetime(day.year, day.month, day.day,
+                            SLOT_END_HOURS[slot_name], tzinfo=IST)
+    else:
+        today = now.replace(minute=0, second=0, microsecond=0)
+        candidates = [
+            today.replace(hour=18), today.replace(hour=6),
+            (today - timedelta(days=1)).replace(hour=18),
+            (today - timedelta(days=1)).replace(hour=6),
+        ]
+        if slot:
+            candidates = [c for c in candidates if c.hour == SLOT_END_HOURS[slot.capitalize()]]
+        boundary = next(c for c in candidates if c <= now)
+        slot_name = "Morning" if boundary.hour == 6 else "Evening"
+
+    start_ist = boundary - timedelta(hours=SLOT_HOURS)
+    return {
+        "start": _utc_str(start_ist),
+        "end": _utc_str(boundary),
+        "title": f"Bot Status Report - {boundary:%d %b %Y} ({slot_name})",
+        "file_stem": f"{boundary:%d %b %Y} Bot Status Report - {slot_name}",
+        "window_text": f"{start_ist:%d %b %Y %H:%M} - {boundary:%d %b %Y %H:%M} IST",
+    }
+
+
+# ===========================================================================
+# Excel Export  (Bot Status Report)
+# ===========================================================================
+def _schedule_lookup():
+    """
+    Returns lookup(automation_name) -> the bot's schedule from the master
+    list (drives the Occurrence column), or None if the bot isn't in it.
+    """
+    try:
+        from database import SessionLocal
+        from services.excel_parser import _build_bot_matcher
+
+        db = SessionLocal()
+        try:
+            match = _build_bot_matcher(db)
+        finally:
+            db.close()
+
+        def lookup(name: str) -> Optional[str]:
+            bot = match(name)
+            return bot.schedule if bot else None
+
+        return lookup
+    except Exception as e:
+        logger.warning(f"Bot master unavailable, Occurrence will show 'Unknown': {e}")
+        return lambda name: "Unknown"
+
+
+def _export_excel(records: List[Dict[str, Any]],
+                  window: Dict[str, str]) -> Tuple[Optional[str], Dict[str, Any]]:
+    """
+    Writes the Bot Status Report workbook for the window.
+    Returns (absolute path or None on failure, report stats).
     """
     if not records:
         logger.warning("No records to export.")
-        return None
+        return None, {}
+
+    from services.bot_status_report import write_report
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
-    excel_path = str(OUTPUT_DIR / f"Adani_Daily_Bot_Status_{timestamp}.xlsx")
+    excel_path = str(OUTPUT_DIR / f"{window['file_stem']}.xlsx")
 
     try:
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Control Room Dump"
-
-        # Column headers that match what excel_parser.parse_daily_report expects
-        headers = [
-            "Activity Name",
-            "Status",
-            "Started On",
-            "Ended On",
-            "Device Name",
-            "Automation Type",
-            "Error Message",
-        ]
-
-        # Style headers
-        hdr_font = Font(bold=True, color="FFFFFF")
-        hdr_fill = PatternFill(
-            start_color="1F4E78", end_color="1F4E78", fill_type="solid"
-        )
-        for col_idx, header in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col_idx, value=header)
-            cell.font = hdr_font
-            cell.fill = hdr_fill
-            cell.alignment = Alignment(horizontal="center")
-            ws.column_dimensions[
-                openpyxl.utils.get_column_letter(col_idx)
-            ].width = 30
-
-        # De-duplicate by execution ID and write rows
-        seen_ids: set = set()
-        row_idx = 2
-        for rec in records:
-            exec_id = rec.get("id") or (
-                f"{rec.get('automationName', '')}_{rec.get('startDateTime', '')}"
-                f"_{rec.get('endDateTime', '')}_{rec.get('deviceName', '')}"
-            )
-            if exec_id in seen_ids:
-                continue
-            seen_ids.add(exec_id)
-
-            err = rec.get("error", {})
-            error_msg = err.get("message", "") if isinstance(err, dict) else ""
-
-            row_data = [
-                rec.get("automationName", ""),
-                rec.get("status", ""),
-                rec.get("startDateTime", ""),
-                rec.get("endDateTime", ""),
-                rec.get("deviceName", ""),
-                rec.get("automationType", ""),
-                error_msg,
-            ]
-            for col_idx, val in enumerate(row_data, 1):
-                ws.cell(row=row_idx, column=col_idx, value=val)
-            row_idx += 1
-
-        wb.save(excel_path)
-        logger.info(f"Excel saved: {excel_path}  ({row_idx - 2} rows)")
-        return excel_path
-
+        stats = write_report(records, excel_path, window["title"],
+                             window["window_text"], _schedule_lookup())
+        logger.info(f"Excel saved: {excel_path}  ({stats['rows']} rows, "
+                    f"status {stats['status_counts']}, overridden {stats['overridden']})")
+        return excel_path, stats
     except Exception as e:
         logger.error(f"Failed to write Excel: {e}")
-        return None
+        return None, {}
 
 
 # ===========================================================================
@@ -351,22 +407,66 @@ def _export_json(records: List[Dict[str, Any]], start_time: str,
 
 
 # ===========================================================================
+# Dashboard trigger
+# ===========================================================================
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=5, max=30),
+    retry=retry_if_exception_type(RequestException),
+)
+def _post_sync_trigger(verify) -> requests.Response:
+    resp = requests.post(
+        DASHBOARD_SYNC_URL,
+        headers={"X-Sync-Token": SYNC_TRIGGER_TOKEN},
+        timeout=30,
+        verify=verify,
+    )
+    if resp.status_code >= 500 and resp.status_code != 503:
+        resp.raise_for_status()  # let tenacity retry while the server restarts
+    return resp
+
+
+def _trigger_dashboard_sync() -> str:
+    """
+    Ask the dashboard to ingest and email the new report now. Returns a
+    short status; failure is not fatal - the server's scheduled
+    run_sharepoint_sync.py picks the file up later.
+    """
+    if not SYNC_TRIGGER_TOKEN:
+        return "skipped (SYNC_TRIGGER_TOKEN not set)"
+    from services.sharepoint_service import _resolve_ssl_verify
+
+    try:
+        resp = _post_sync_trigger(_resolve_ssl_verify())
+    except RetryError as e:
+        return f"failed after retries: {e.last_attempt.exception()}"
+    except Exception as e:
+        return f"failed: {e}"
+    if resp.status_code == 202:
+        return "triggered"
+    return f"failed: HTTP {resp.status_code} {resp.text[:200]}"
+
+
+# ===========================================================================
 # Public API — the single entry-point for the sync pipeline
 # ===========================================================================
 def aa_sync(
-    hours: int = 12,
+    hours: int = None,
     start: str = None,
     end: str = None,
     upload_to_sharepoint: bool = True,
+    date: str = None,
+    slot: str = None,
 ) -> Dict[str, Any]:
     """
     Runs the full Automation Anywhere sync pipeline:
       1. Authenticate with AA Control Room
       2. Fetch activity records (paginated, device-filtered)
-      3. Export Excel (SharePoint format) + JSON archive
-      4. Optionally upload the Excel file to SharePoint
+      3. Export the Bot Status Report workbook + JSON archive
+      4. Optionally upload the workbook to the SharePoint AA folder
 
-    Returns a summary dict with status and file paths.
+    With no window arguments, reports the latest completed Morning/Evening
+    slot (see resolve_window). Returns a summary dict with status and file paths.
     """
     result: Dict[str, Any] = {
         "status": "error",
@@ -377,15 +477,18 @@ def aa_sync(
     }
 
     # --- Resolve time window ---
-    if start and end:
-        start_time, end_time = start, end
-    else:
-        now = datetime.now(timezone.utc)
-        start_time = (now - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        end_time = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        window = resolve_window(hours=hours, start=start, end=end, date=date, slot=slot)
+    except (ValueError, KeyError) as e:
+        result["message"] = f"Invalid report window: {e}"
+        logger.error(result["message"])
+        return result
+    start_time, end_time = window["start"], window["end"]
+    result["report_title"] = window["title"]
 
     logger.info("=" * 60)
     logger.info("Automation Anywhere Sync -- Starting")
+    logger.info(f"Report: {window['title']}  ({window['window_text']})")
     logger.info(f"Time window: {start_time} -> {end_time}")
     logger.info("=" * 60)
 
@@ -414,19 +517,28 @@ def aa_sync(
     logger.info(f"Device breakdown: {dict(device_counts)}")
 
     # --- 3. Export ---
-    result["excel_path"] = _export_excel(records, start_time, end_time)
+    result["excel_path"], result["report"] = _export_excel(records, window)
     result["json_path"] = _export_json(records, start_time, end_time)
+    if not result["excel_path"]:
+        result["message"] = "Report workbook could not be written (see log)."
+        return result
 
     # --- 4. Upload to SharePoint ---
     if upload_to_sharepoint and result["excel_path"]:
         try:
-            from services.sharepoint_service import SharePointService
+            from services.sharepoint_service import SharePointService, SHAREPOINT_AA_FOLDER
 
             sp = SharePointService()
-            upload_ok = sp.upload_file(result["excel_path"])
+            upload_ok = sp.upload_file(result["excel_path"], folder_path=SHAREPOINT_AA_FOLDER)
             result["sharepoint_upload"] = "success" if upload_ok else "failed"
             if upload_ok:
                 logger.info("SharePoint upload: SUCCESS")
+                result["dashboard_sync"] = _trigger_dashboard_sync()
+                if result["dashboard_sync"] == "triggered":
+                    logger.info("Dashboard sync: TRIGGERED (runs and email follow within minutes)")
+                else:
+                    logger.warning(f"Dashboard sync: {result['dashboard_sync']} "
+                                   "- the server's scheduled sync will pick the report up")
             else:
                 logger.warning("SharePoint upload: FAILED (see logs above)")
         except Exception as e:
@@ -446,18 +558,24 @@ def aa_sync(
 
 
 # ===========================================================================
-# CLI entry-point  (python -m services.aa_service --hours 12)
+# CLI entry-point  (python -m services.aa_service)
 # ===========================================================================
 def _cli():
     parser = argparse.ArgumentParser(
-        description="Automation Anywhere -> SharePoint Sync"
+        description="Automation Anywhere -> SharePoint Sync. With no window "
+                    "options, reports the latest completed Morning/Evening slot."
     )
     parser.add_argument(
-        "--hours", type=int, default=12,
-        help="Rolling hours window (default: 12)"
+        "--slot", choices=["morning", "evening"],
+        help="Morning = 18:00 (previous day) to 06:00 IST, Evening = 06:00 to 18:00 IST"
     )
-    parser.add_argument("--start", type=str, help="Start ISO-8601 datetime")
-    parser.add_argument("--end", type=str, help="End ISO-8601 datetime")
+    parser.add_argument(
+        "--date", type=str,
+        help="Report date YYYY-MM-DD (the day the slot ends); requires --slot"
+    )
+    parser.add_argument("--hours", type=int, help="Rolling hours window ending now")
+    parser.add_argument("--start", type=str, help="Start ISO-8601 datetime (UTC if no offset)")
+    parser.add_argument("--end", type=str, help="End ISO-8601 datetime (UTC if no offset)")
     parser.add_argument(
         "--no-upload", action="store_true",
         help="Skip SharePoint upload (export only)"
@@ -469,6 +587,8 @@ def _cli():
         start=args.start,
         end=args.end,
         upload_to_sharepoint=not args.no_upload,
+        date=args.date,
+        slot=args.slot,
     )
 
     # Print human-readable summary
@@ -476,11 +596,18 @@ def _cli():
     print("  Automation Anywhere -> SharePoint Sync  Summary")
     print("=" * 55)
     print(f"  Status:            {result['status']}")
+    print(f"  Report:            {result.get('report_title', 'N/A')}")
     print(f"  Records fetched:   {result['records']}")
     print(f"  Excel file:        {result.get('excel_path', 'N/A')}")
     print(f"  JSON archive:      {result.get('json_path', 'N/A')}")
     print(f"  SharePoint upload: {result.get('sharepoint_upload', 'N/A')}")
+    print(f"  Dashboard sync:    {result.get('dashboard_sync', 'N/A')}")
+    if result.get("message"):
+        print(f"  Message:           {result['message']}")
     print("=" * 55 + "\n")
+
+    # Non-zero exit so Task Scheduler shows the run as failed
+    raise SystemExit(0 if result["status"] == "success" else 1)
 
 
 if __name__ == "__main__":

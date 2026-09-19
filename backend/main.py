@@ -72,14 +72,17 @@ app.include_router(visits.router)
 app.include_router(auth.router)
 
 import subprocess
-from fastapi import HTTPException
+import sys
+from fastapi import HTTPException, Depends
+from routers.auth import require_admin
 
 @app.get("/api/download-ppt")
-async def download_ppt():
+def download_ppt(current_user: str = Depends(require_admin)):
     try:
-        # Trigger the python script to generate the PPT
+        # Trigger the python script to generate the PPT. sys.executable: the
+        # backend's own (venv) Python, which has python-pptx installed.
         script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generate_ppt.py")
-        result = subprocess.run(["python", script_path], capture_output=True, text=True, check=True)
+        result = subprocess.run([sys.executable, script_path], capture_output=True, text=True, check=True)
         print("PPT Generation Output:", result.stdout)
         
         ppt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads", "Adani_Portfolio_RPA_Report.pptx")

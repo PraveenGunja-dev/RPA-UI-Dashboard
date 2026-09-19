@@ -14,13 +14,16 @@ from mail_util import send_new_bot_notification
 from send_periodic_reports import send_reports
 
 from database import get_db
-from models import FileLog, Bot, Department, SPOC, RegisteredUser, AuditLog
-from .auth import get_current_user_email
+from models import FileLog, Bot, Department, SPOC, RegisteredUser, AuditLog, EmailLog
+from services.report_mailer import send_report_email, resolve_report_path
+from .auth import get_current_user_email, require_admin
 
 
+# Every admin endpoint needs a signed-in Admin (the Admin page is only a UI guard)
 router = APIRouter(
     prefix="/api/admin",
-    tags=["admin"]
+    tags=["admin"],
+    dependencies=[Depends(require_admin)]
 )
 
 # Pydantic schemas for bot management
@@ -547,6 +550,38 @@ def get_audit_logs(db: Session = Depends(get_db)):
     """Fetch all admin activity audit logs."""
     logs = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).all()
     return logs
+
+# Bot Status Report emails (services/report_mailer.py)
+@router.get("/email-logs")
+def get_email_logs(db: Session = Depends(get_db), current_user: str = Depends(require_admin)):
+    """Every Bot Status Report email attempt, newest first."""
+    return db.query(EmailLog).order_by(EmailLog.id.desc()).all()
+
+@router.post("/email-logs/{log_id}/resend")
+def resend_report_email(log_id: int, db: Session = Depends(get_db), current_user: str = Depends(require_admin)):
+    """Send the report from this log entry again, to the current recipients."""
+    log = db.query(EmailLog).filter(EmailLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Email log not found")
+    new_log = send_report_email(db, log.report_name, log.file_path, log.report_date, current_user)
+    if new_log.status != "Sent":
+        raise HTTPException(status_code=502, detail=f"Email failed: {new_log.error_message}")
+    return new_log
+
+@router.get("/email-logs/{log_id}/file")
+def download_report_file(log_id: int, db: Session = Depends(get_db), current_user: str = Depends(require_admin)):
+    """Download the report that was (or would have been) attached."""
+    log = db.query(EmailLog).filter(EmailLog.id == log_id).first()
+    if not log or not log.file_path:
+        raise HTTPException(status_code=404, detail="Email log not found")
+    path = resolve_report_path(log.file_path)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Report file not found")
+    return FileResponse(
+        path=path,
+        filename=log.report_name,
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 @router.post("/trigger-weekly-summary")
 def trigger_weekly_summary(background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user_email)):

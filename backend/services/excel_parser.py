@@ -1,9 +1,13 @@
 import openpyxl
+from collections import Counter
 from sqlalchemy.orm import Session
-from typing import Tuple, List, Any
+from typing import Tuple, List, Any, Optional
 import re
 from models import Department, SPOC, Bot, BotRun
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from utils import calculate_realized_savings
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 def normalize_column_name(col: Any) -> str:
     """Normalize column names for consistent mapping."""
@@ -366,6 +370,287 @@ def parse_master_excel(file_path: str, db: Session) -> Tuple[int, int, int, int,
     return records_processed, departments_created, spocs_created, bots_created, errors
 
 
+def _build_bot_matcher(db: Session):
+    """
+    Returns match(activity_name) -> Bot or None. Loads bots once instead of
+    querying per row. Match order:
+      1. Exact use_case_name
+      2. Exact use_case_no (e.g. "AUC004")
+      3. Activity name starts with a use_case_no ("AUC004 AGEL..." -> "AUC004")
+      4. Exact use_case_name before a version suffix ("BotName.1" -> "BotName"),
+         which avoids "BotNameExtra" matching "BotName"
+    Prefix/substring matching on names was removed: it caused false positives.
+    """
+    bots = db.query(Bot).all()
+    by_name = {}
+    by_no = {}
+    for b in bots:
+        by_name.setdefault(b.use_case_name, b)
+        if b.use_case_no:
+            by_no.setdefault(b.use_case_no, b)
+    # Ensure use_case_no is specific enough (at least 3 chars) for prefix matching
+    prefixed = [b for b in bots if b.use_case_no and len(b.use_case_no) >= 3]
+
+    def match(activity_name: str):
+        bot = by_name.get(activity_name) or by_no.get(activity_name)
+        if bot:
+            return bot
+        for b in prefixed:
+            if activity_name.startswith(b.use_case_no):
+                return b
+        return by_name.get(re.split(r'\.\d+', activity_name)[0])
+
+    return match
+
+
+def _parse_aa_timestamp(value) -> Optional[datetime]:
+    """
+    Parse a run timestamp in either format the AA exports use:
+    '2026-09-18T12:24:14.7765639Z' (API, UTC) or '2026-09-18 17:54:14 IST'
+    (Control Room UI / Bot Status Report).
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    s = str(value).strip()
+    if s.upper().endswith(' IST'):
+        try:
+            return datetime.strptime(s[:-4].strip(), '%Y-%m-%d %H:%M:%S').replace(tzinfo=IST)
+        except ValueError:
+            return None
+    s = s.replace('Z', '+00:00')
+    # AA sends 7 fractional digits; older Pythons only accept up to 6
+    s = re.sub(r'(\.\d{6})\d+', r'\1', s)
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def parse_aa_report(file_path: str, db: Session, allowed_devices=None) -> dict:
+    """
+    Merge the runs in a run file into bot_runs. Handles the Automation
+    Anywhere Bot Status Report (services/aa_service.py) and the manual
+    Control Room exports the team keeps in SharePoint (same columns).
+
+    Unlike parse_daily_report, a file can span two days and several files can
+    cover the same day, so:
+      - each run's report_date is the IST date of its Ended On time, and
+      - runs already stored (same bot, start and end within a second -
+        compared as instants, whatever format they were stored in)
+        are skipped instead of deleting and re-inserting the whole day.
+    So a manual file only fills runs the AA sync missed, and re-processing a
+    file is safe.
+
+    allowed_devices: if given, rows from other devices are ignored (manual
+    exports include developer machines the AA sync does not report).
+    result["unmergeable"] is True when the file has no Started on / Ended on
+    columns, so its runs can't be matched to stored ones.
+    """
+    from services.bot_status_report import FORCE_COMPLETED_BOTS
+
+    result = {
+        "runs_inserted": 0,
+        "duplicates_skipped": 0,
+        "other_devices_skipped": 0,
+        "unfinished_skipped": 0,
+        "unique_bots": 0,
+        "hours_saved": 0.0,
+        "report_dates": [],
+        "errors": [],
+        "unmergeable": False,
+    }
+    errors = result["errors"]
+
+    try:
+        wb = openpyxl.load_workbook(file_path, data_only=True, read_only=True)
+        # The Bot Status Report keeps the runs on "Control Room Dump", after
+        # the two pivot sheets; older AA exports have a single sheet.
+        sheet_name = next(
+            (n for n in wb.sheetnames if 'dump' in n.lower() or 'control room' in n.lower()),
+            wb.sheetnames[0],
+        )
+        rows = list(wb[sheet_name].iter_rows(values_only=True))
+        wb.close()
+    except Exception as e:
+        errors.append(f"File processing error: {str(e)}")
+        return result
+
+    if not rows:
+        errors.append("Empty file")
+        return result
+
+    header_index_map = {
+        normalize_column_name(v): idx for idx, v in enumerate(rows[0]) if v
+    }
+    missing_cols = [c for c in ('activity_name', 'status') if c not in header_index_map]
+    if 'started_on' not in header_index_map and 'ended_on' not in header_index_map:
+        missing_cols.append('started_on / ended_on')
+        result["unmergeable"] = True
+    if missing_cols:
+        errors.append(f"Missing required columns: {', '.join(missing_cols)}")
+        return result
+
+    def get_val(row, norm_key):
+        idx = header_index_map.get(norm_key)
+        if idx is None or idx >= len(row):
+            return None
+        val = row[idx]
+        if isinstance(val, str):
+            val = val.strip() or None
+        return val
+
+    def as_str(val):
+        return str(val) if val is not None else None
+
+    allowed = {d.lower() for d in allowed_devices} if allowed_devices else None
+    match_bot = _build_bot_matcher(db)
+    candidates = []
+    matched_bot_ids = set()
+
+    for row_idx, row in enumerate(rows[1:], start=2):
+        activity_name = get_val(row, 'activity_name')
+        if not activity_name:
+            continue
+        device_name = as_str(get_val(row, 'device_name') or get_val(row, 'device'))
+        if allowed is not None and (device_name or '').lower() not in allowed:
+            result["other_devices_skipped"] += 1
+            continue
+        automation_name = get_val(row, 'automation_name')
+        bot = match_bot(str(activity_name))
+        if not bot and automation_name:
+            bot = match_bot(str(automation_name))
+        if not bot:
+            continue
+        matched_bot_ids.add(bot.id)
+
+        started_on = get_val(row, 'started_on')
+        ended_on = get_val(row, 'ended_on')
+        if 'ended_on' in header_index_map:
+            run_dt = _parse_aa_timestamp(ended_on)
+        else:
+            run_dt = _parse_aa_timestamp(started_on)
+        if not run_dt:
+            if ended_on is None or str(ended_on).strip().upper() in ('N/A', 'NA', '-', '--'):
+                # Still running when the file was exported (or no time
+                # recorded); the finished run arrives in a later file.
+                result["unfinished_skipped"] += 1
+            else:
+                errors.append(f"Row {row_idx}: unreadable Ended On value {ended_on!r}")
+            continue
+
+        status = as_str(get_val(row, 'status')) or 'Unknown'
+        name_upper = str(automation_name or activity_name).upper()
+        if 'completed' not in status.lower() and any(name_upper.startswith(p) for p in FORCE_COMPLETED_BOTS):
+            status = 'Completed'  # CoBot rule, as in the Bot Status Report
+
+        candidates.append(BotRun(
+            bot_id=bot.id,
+            run_status=status,
+            started_on=as_str(started_on),
+            ended_on=as_str(ended_on),
+            device_name=device_name,
+            report_date=run_dt.astimezone(IST).strftime('%Y-%m-%d'),
+            automation_type=as_str(get_val(row, 'automation_type')),
+        ))
+
+    def run_key(bot_id, started_on, ended_on, device_name):
+        # Instants in whole seconds: the same run may be stored as
+        # '...T12:24:14.7765639Z' (AA API) or '... 17:54:14 IST' (reports).
+        # Device is left out: runs loaded by parse_daily_report have none.
+        def instant(v):
+            dt = _parse_aa_timestamp(v)
+            return int(dt.timestamp()) if dt else v
+        return (bot_id, instant(started_on), instant(ended_on))
+
+    # Exact first, then 1s either way: exports truncate or round fractional
+    # seconds. Only used against stored runs - rows within one file are
+    # distinct even a second apart (e.g. rapid deploy retries).
+    offsets = [(0, 0)] + [(i, j) for i in (-1, 0, 1) for j in (-1, 0, 1) if (i, j) != (0, 0)]
+
+    def take_stored(key, stored):
+        """Consume the stored run matching key, if any (each matches once)."""
+        bot_id, start, end = key
+        if not isinstance(start, int) or not isinstance(end, int):
+            probes = [key]
+        else:
+            probes = [(bot_id, start + i, end + j) for i, j in offsets]
+        for probe in probes:
+            if stored.get(probe, 0) > 0:
+                stored[probe] -= 1
+                return True
+        return False
+
+    # Runs already in the DB around the same dates (a run's stored report_date
+    # can differ by a day depending on which file/timezone stored it).
+    stored = Counter()
+    candidate_dates = {r.report_date for r in candidates}
+    nearby_dates = set()
+    for d in candidate_dates:
+        day = datetime.strptime(d, '%Y-%m-%d')
+        nearby_dates.update((day + timedelta(days=k)).strftime('%Y-%m-%d') for k in (-1, 0, 1))
+    if nearby_dates:
+        existing = db.query(
+            BotRun.bot_id, BotRun.started_on, BotRun.ended_on, BotRun.device_name
+        ).filter(
+            BotRun.report_date.in_(sorted(nearby_dates)),
+            BotRun.bot_id.in_(matched_bot_ids),
+        ).all()
+        stored.update(run_key(*r) for r in existing)
+
+    new_runs = []
+    in_file = set()
+    for run in candidates:
+        key = run_key(run.bot_id, run.started_on, run.ended_on, run.device_name)
+        if key in in_file or take_stored(key, stored):
+            result["duplicates_skipped"] += 1
+            continue
+        in_file.add(key)
+        new_runs.append(run)
+
+    try:
+        db.add_all(new_runs)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        errors.append(f"Database error: {str(e)}")
+        return result
+
+    # Hours saved by the runs this file added
+    completed_counts = {}
+    for run in new_runs:
+        if 'completed' in run.run_status.lower():
+            key = (run.bot_id, run.report_date)
+            completed_counts[key] = completed_counts.get(key, 0) + 1
+    bots_by_id = {b.id: b for b in db.query(Bot).filter(Bot.id.in_(matched_bot_ids)).all()} if matched_bot_ids else {}
+    for (bot_id, report_date), count in completed_counts.items():
+        result["hours_saved"] += calculate_realized_savings(bots_by_id[bot_id], report_date, count)
+
+    result["runs_inserted"] = len(new_runs)
+    result["unique_bots"] = len(matched_bot_ids)
+    result["report_dates"] = sorted({r.report_date for r in candidates})
+    return result
+
+
+def ingest_manual_file(file_path: str, db: Session) -> dict:
+    """
+    Store a run file the team keeps manually (Control Room export / Bot
+    Status Report in SharePoint, or uploaded in Admin). It is a backup for the
+    Automation Anywhere sync: runs are merged, so only runs missing from the
+    dashboard (e.g. the AA sync failed that day) are added; nothing is
+    counted twice and AA data is never replaced.
+
+    Only the AA runner machines are taken, so a day filled from a manual file
+    counts the same runs the AA sync would have.
+    Returns the same dict as parse_aa_report.
+    """
+    from services.aa_service import TARGET_DEVICES
+
+    return parse_aa_report(file_path, db, allowed_devices=TARGET_DEVICES)
+
+
 def parse_daily_report(file_path: str, db: Session, report_date: str = None) -> Tuple[int, int, float, List[str]]:
     """
     Parse the daily bot status report and store run records.
@@ -444,7 +729,9 @@ def parse_daily_report(file_path: str, db: Session, report_date: str = None) -> 
         
         # Delete existing runs for this report date
         db.query(BotRun).filter(BotRun.report_date == report_date).delete()
-        
+
+        match_bot = _build_bot_matcher(db)
+
         for row_idx, row in enumerate(rows[1:], start=2):
             try:
                 def get_val(norm_key):
@@ -468,36 +755,7 @@ def parse_daily_report(file_path: str, db: Session, report_date: str = None) -> 
                 if not activity_name or activity_name.lower() == 'nan':
                     continue
                 
-                # Try to match with existing bot
-                # 1. Exact match by use_case_name
-                bot = db.query(Bot).filter(Bot.use_case_name == activity_name).first()
-                
-                if not bot:
-                    # 2. Exact match by use_case_no (e.g. "AUC004")
-                    bot = db.query(Bot).filter(Bot.use_case_no == activity_name).first()
-
-                if not bot:
-                    # 3. Fuzzy match: Check if activity_name starts with any bot's use_case_no
-                    # This handles "AUC004 AGEL..." if the bot use_case_no is "AUC004"
-                    bots_with_no = db.query(Bot).filter(Bot.use_case_no != None).all()
-                    for b in bots_with_no:
-                        # Ensure use_case_no is specific enough (at least 3 chars)
-                        if b.use_case_no and len(b.use_case_no) >= 3 and activity_name.startswith(b.use_case_no):
-                            bot = b
-                            break
-                
-                if not bot:
-                    # 4. STRICTER fuzzy match by base name (must be exact match before version)
-                    # This handles "BotName.1" matching "BotName" 
-                    # But avoids "BotNameExtra" matching "BotName"
-                    base_name = re.split(r'\.\d+', activity_name)[0]
-                    # Check if base_name is exactly equal to a bot name
-                    bot = db.query(Bot).filter(Bot.use_case_name == base_name).first()
-
-                # REMOVED RISKY MATCHING STEPS (5 & 6) 
-                # Prefix matching and substring matching were causing false positives.
-
-                
+                bot = match_bot(activity_name)
                 if not bot:
                     continue
                 
@@ -574,18 +832,6 @@ def parse_daily_report(file_path: str, db: Session, report_date: str = None) -> 
     for bot_id, count in bot_run_counts.items():
          bot = db.query(Bot).get(bot_id)
          if bot:
-             # Inline calculation logic to avoid circular import
-             monthly = bot.hours_saved_monthly or 0
-             per_day = bot.per_day_saving_hours or 0
-             sched = (bot.schedule or "").lower()
-             freq = float(bot.frequency) if bot.frequency else 1.0
-             if freq <= 0: freq = 1.0
-             
-             if 'on demand' in sched or 'multiple' in sched:
-                 total_hours_saved += (per_day * count)
-             else:
-                 # Daily/Weekly/Monthly
-                 val_per_run = monthly / freq
-                 total_hours_saved += (val_per_run * count)
-             
+             total_hours_saved += calculate_realized_savings(bot, report_date, count)
+
     return runs_processed, len(matched_bot_ids), total_hours_saved, errors

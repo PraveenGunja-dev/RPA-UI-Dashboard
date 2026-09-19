@@ -13,7 +13,7 @@ from database import get_db
 from models import RegisteredUser
 from mail_util import send_admin_notification
 from database import SessionLocal
-from .integration import run_sync_sharepoint
+from .integration import run_sync_sharepoint_in_thread
 
 load_dotenv()
 
@@ -70,17 +70,18 @@ async def login():
     )
     return RedirectResponse(auth_url)
 
-async def background_sync_wrapper():
-    """Wrapper to run sync in background with its own DB session."""
+def background_sync_wrapper():
+    """
+    Run a sync after login with its own DB session. A plain function, so
+    FastAPI runs it in a worker thread instead of blocking the server. Skips
+    if a sync is already running (logins don't queue up behind it).
+    """
     print("BACKGROUND SYNC: Starting auto-sync after login...")
-    db = SessionLocal()
     try:
-        await run_sync_sharepoint(db)
-        print("BACKGROUND SYNC: Auto-sync completed.")
+        result = run_sync_sharepoint_in_thread(wait_seconds=0)
+        print(f"BACKGROUND SYNC: {result.get('message')}")
     except Exception as e:
         print(f"BACKGROUND SYNC ERROR: {e}")
-    finally:
-        db.close()
 
 @router.get("/callback")
 async def callback(code: str, background_tasks: BackgroundTasks, state: str = None, session_state: str = None, response: Response = None, db: Session = Depends(get_db)):
@@ -202,6 +203,30 @@ def get_current_user_email(request: Request) -> str:
     except:
         return None
 
+def resolve_role(email: str, db: Session) -> str:
+    """Role from the user table; ADMIN_EMAILS always counts as Admin."""
+    user = db.query(RegisteredUser).filter(RegisteredUser.email == email, RegisteredUser.is_active == 1).first()
+    role = user.role if user else "User"
+
+    raw_admin_emails = os.getenv("ADMIN_EMAILS", "")
+    current_admin_emails = [e.strip().lower() for e in raw_admin_emails.split(",") if e.strip()]
+    if email in current_admin_emails:
+        if role != "Admin":
+            print(f"AUTH: Promoting {email} to Admin based on ADMIN_EMAILS config.")
+        role = "Admin"
+    return role
+
+
+def require_admin(request: Request, db: Session = Depends(get_db)) -> str:
+    """Dependency: the signed-in admin's email, or 401/403."""
+    email = get_current_user_email(request)
+    if not email:
+        raise HTTPException(status_code=401, detail="Not signed in")
+    if resolve_role(email, db) != "Admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return email
+
+
 @router.get("/me")
 async def get_me(request: Request, db: Session = Depends(get_db)):
     # Add Cache-Control to prevent browser from caching old role status
@@ -217,20 +242,7 @@ async def get_me(request: Request, db: Session = Depends(get_db)):
             print("AUTH ERROR: Token payload has no 'sub' claim")
             return {"authenticated": False}
 
-        # Look up role from database
-        user = db.query(RegisteredUser).filter(RegisteredUser.email == email, RegisteredUser.is_active == 1).first()
-        
-        role = user.role if user else "User"
-        
-        # Secondary check: If email is in ADMIN_EMAILS list, promote to Admin
-        raw_admin_emails = os.getenv("ADMIN_EMAILS", "")
-        current_admin_emails = [e.strip().lower() for e in raw_admin_emails.split(",") if e.strip()]
-        
-        if email in current_admin_emails:
-            if role != "Admin":
-                print(f"AUTH: Promoting {email} to Admin based on ADMIN_EMAILS config.")
-            role = "Admin"
-            
+        role = resolve_role(email, db)
         print(f"AUTH CHECK: {email} -> Identified as {role}")
         
         return {

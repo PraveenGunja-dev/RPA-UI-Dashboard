@@ -35,6 +35,8 @@ SHAREPOINT_CLIENT_SECRET = os.getenv("SHAREPOINT_CLIENT_SECRET")
 SHAREPOINT_TENANT_ID = os.getenv("SHAREPOINT_TENANT_ID")
 SHAREPOINT_SITE_URL = os.getenv("SHAREPOINT_SITE_URL", "https://adaniltd.sharepoint.com/sites/AGEL-Automation")
 SHAREPOINT_TARGET_FOLDER = os.getenv("SHAREPOINT_TARGET_FOLDER", "/sites/AGEL-Automation/Shared Documents/Bots/Agent Dashboard")
+# Dedicated folder for Automation Anywhere exports (services/aa_service.py)
+SHAREPOINT_AA_FOLDER = os.getenv("SHAREPOINT_AA_FOLDER", f"{SHAREPOINT_TARGET_FOLDER.rstrip('/')}/AA Daily Reports")
 
 
 def _resolve_ssl_verify():
@@ -194,14 +196,16 @@ class SharePointService:
                 return (f"https://graph.microsoft.com/v1.0/sites/{self.site_id}"
                         f"/drives/{drive_id}/root"), drive_id
 
-    def list_files(self):
+    def list_files(self, folder_path: str = None):
         """
-        List files in the target folder.
+        List files in the target folder (or folder_path, if given).
         Returns list of dicts with 'Name', 'ServerRelativeUrl', 'TimeLastModified'
         to maintain backward compatibility with the old office365 API.
         """
+        folder_path = folder_path or self.folder_path
+
         def _do_list_files():
-            url, _ = self._get_graph_url_for_path(self.folder_path, "children")
+            url, _ = self._get_graph_url_for_path(folder_path, "children")
             headers = {"Authorization": f"Bearer {self.token}"}
 
             all_items = []
@@ -222,7 +226,7 @@ class SharePointService:
                 if 'file' in item:
                     file_list.append({
                         "Name": item.get("name"),
-                        "ServerRelativeUrl": f"{self.folder_path}/{item.get('name')}",
+                        "ServerRelativeUrl": f"{folder_path}/{item.get('name')}",
                         "TimeLastModified": item.get("lastModifiedDateTime", "")
                     })
 
@@ -320,7 +324,8 @@ class SharePointService:
                 else:
                     raise Exception(f"Error downloading file {file_path}: {str(e)}")
 
-    def upload_file(self, local_file_path: str, remote_filename: str = None) -> bool:
+    def upload_file(self, local_file_path: str, remote_filename: str = None,
+                    folder_path: str = None) -> bool:
         """
         Upload a local file to the configured SharePoint target folder
         via Microsoft Graph API.
@@ -329,6 +334,8 @@ class SharePointService:
             local_file_path: Absolute path to the local file.
             remote_filename: Optional override for the filename in SharePoint.
                              Defaults to the local file's basename.
+            folder_path: Optional override for the destination folder.
+                         Defaults to the configured target folder.
 
         Returns:
             True on success, False on failure.
@@ -340,7 +347,7 @@ class SharePointService:
         filename = remote_filename or os.path.basename(local_file_path)
 
         try:
-            drive_id, rel_path = self._resolve_drive_and_path(self.folder_path)
+            drive_id, rel_path = self._resolve_drive_and_path(folder_path or self.folder_path)
 
             # Build the upload URL:
             #   PUT /drives/{drive-id}/root:/{folder}/{filename}:/content

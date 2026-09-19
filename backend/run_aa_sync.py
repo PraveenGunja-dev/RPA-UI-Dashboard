@@ -4,17 +4,20 @@ Automation Anywhere → SharePoint Sync  (CLI Entry Point)
 
 This script is the single command you schedule in Windows Task Scheduler.
 It pulls bot execution data from the Automation Anywhere Control Room API,
-generates an Excel file matching the SharePoint daily-report format, and
-uploads it to the configured SharePoint folder automatically.
+generates the Bot Status Report workbook, and uploads it to the SharePoint
+AA folder, where the dashboard picks it up, stores the runs and emails it.
 
 Usage:
-    python run_aa_sync.py              # last 12 hours (default)
-    python run_aa_sync.py --hours 24   # last 24 hours
-    python run_aa_sync.py --no-upload  # export only, skip SharePoint upload
-    python run_aa_sync.py --help       # show all options
+    python run_aa_sync.py                                  # latest completed slot
+    python run_aa_sync.py --date 2026-09-19 --slot evening # re-run a specific slot
+    python run_aa_sync.py --no-upload                      # export only, skip SharePoint upload
+    python run_aa_sync.py --help                           # show all options
+
+Slots (IST): Morning = 18:00 previous day -> 06:00, Evening = 06:00 -> 18:00.
 
 Scheduling:
-    This is automatically scheduled to run every 12 hours by setup_schedules.bat.
+    Run daily at 06:00 and 18:00 with no arguments; each run reports the
+    slot that just ended, even if the task starts late.
 """
 
 import sys

@@ -3,7 +3,7 @@ import {
     ArrowLeft, Download, FileText, CheckCircle, AlertTriangle, ChevronLeft, ChevronRight, Calendar,
     Bot, Users, Building2, Upload, Search, Plus, Edit2, Home,
     Trash2, X, Save, RefreshCw, ExternalLink, BarChart3, Clock, Shield, Database,
-    HelpCircle, Layers, Cpu, Code2, Calculator, Palette, Info, BookOpen, Menu, LogOut, Mail
+    HelpCircle, Layers, Cpu, Code2, Calculator, Palette, Info, BookOpen, Menu, LogOut, Mail, Send
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -1755,6 +1755,179 @@ const ActivityLogsSection = ({ auditLogs, onRefresh }) => {
     );
 };
 
+// Email Reports Section (Bot Status Report emails)
+const EmailReportsSection = ({ emailLogs, onRefresh }) => {
+    const [currentPage, setCurrentPage] = useState(1);
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [resendingId, setResendingId] = useState(null);
+    const itemsPerPage = 10;
+
+    const filtered = statusFilter === 'all' ? emailLogs : emailLogs.filter(l => l.status === statusFilter);
+    const totalPages = Math.ceil(filtered.length / itemsPerPage);
+    const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const countOf = (status) => emailLogs.filter(l => l.status === status).length;
+
+    const handleResend = async (log) => {
+        if (!window.confirm(`Send "${log.report_name}" again to the current admins and failed-bot SPOCs?`)) return;
+        setResendingId(log.id);
+        try {
+            await axios.post(`${API_BASE_URL}/admin/email-logs/${log.id}/resend`);
+            alert('Report email sent.');
+            await onRefresh();
+        } catch (error) {
+            alert('Resend failed: ' + (error.response?.data?.detail || error.message));
+            await onRefresh();
+        } finally {
+            setResendingId(null);
+        }
+    };
+
+    const statusBadge = (status) => {
+        const styles = {
+            Sent: 'bg-emerald-100 text-emerald-700',
+            Failed: 'bg-pink-100 text-pink-700',
+            Skipped: 'bg-amber-100 text-amber-700',
+        };
+        return (
+            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold ${styles[status] || 'bg-gray-100 text-gray-700'}`}>
+                {status === 'Sent' ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+                {status}
+            </span>
+        );
+    };
+
+    const splitEmails = (value) => (value || '').split(',').map(e => e.trim()).filter(Boolean);
+
+    return (
+        <div className="space-y-6 h-full flex flex-col">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Email Reports</h2>
+                    <p className="text-gray-500">Bot Status Report emails sent after each Morning / Evening report</p>
+                </div>
+                <button
+                    onClick={onRefresh}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition-colors"
+                >
+                    <RefreshCw size={18} />
+                    Refresh
+                </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+                {[['all', `All (${emailLogs.length})`], ['Sent', `Sent (${countOf('Sent')})`], ['Failed', `Failed (${countOf('Failed')})`], ['Skipped', `Skipped (${countOf('Skipped')})`]].map(([value, label]) => (
+                    <button
+                        key={value}
+                        onClick={() => { setStatusFilter(value); setCurrentPage(1); }}
+                        className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${statusFilter === value ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 overflow-auto">
+                    <table className="w-full">
+                        <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                            <tr>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Attempted</th>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Report</th>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Status</th>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Recipients</th>
+                                <th className="px-6 py-4 text-left bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Triggered By</th>
+                                <th className="px-6 py-4 text-right bg-gray-50 sticky top-0 z-10 border-b border-gray-200">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {paginated.map((log) => {
+                                const to = splitEmails(log.recipients);
+                                const cc = splitEmails(log.cc);
+                                return (
+                                    <tr key={log.id} className="hover:bg-gray-50 transition-colors align-top">
+                                        <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
+                                            {log.sent_at ? new Date(log.sent_at).toLocaleString('en-IN') : '-'}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="text-sm font-medium text-gray-900">{log.report_name}</div>
+                                            {log.subject && <div className="text-xs text-gray-500">{log.subject}</div>}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {statusBadge(log.status)}
+                                            {log.error_message && (
+                                                <div className="text-xs text-gray-500 mt-1 max-w-xs" title={log.error_message}>
+                                                    {log.error_message.length > 140 ? `${log.error_message.slice(0, 140)}...` : log.error_message}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 text-xs text-gray-600 max-w-xs">
+                                            {to.length > 0 && <div title={to.join(', ')}><strong>To:</strong> {to.length} admin{to.length === 1 ? '' : 's'}</div>}
+                                            {cc.length > 0 && <div title={cc.join(', ')}><strong>Cc:</strong> {cc.join(', ')}</div>}
+                                            {to.length === 0 && cc.length === 0 && '-'}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-600">{log.triggered_by}</td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex justify-end gap-2">
+                                                <a
+                                                    href={`${API_BASE_URL}/admin/email-logs/${log.id}/file`}
+                                                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    title="Download report"
+                                                >
+                                                    <Download size={16} />
+                                                </a>
+                                                <button
+                                                    onClick={() => handleResend(log)}
+                                                    disabled={resendingId === log.id}
+                                                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
+                                                    title="Send this report again"
+                                                >
+                                                    {resendingId === log.id ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                                                    Resend
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            {paginated.length === 0 && (
+                                <tr>
+                                    <td colSpan="6" className="px-6 py-10 text-center text-gray-500">
+                                        No report emails yet. They appear here after the next Morning / Evening report is synced.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white relative z-20">
+                    <div className="text-sm text-gray-500">
+                        Showing <strong>{Math.min((currentPage - 1) * itemsPerPage + 1, filtered.length) || 0}</strong> to <strong>{Math.min(currentPage * itemsPerPage, filtered.length)}</strong> of <strong>{filtered.length}</strong> emails
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                            className="p-2 border border-gray-200 rounded-lg disabled:opacity-50 hover:bg-gray-50 text-gray-600 transition-colors disabled:cursor-not-allowed"
+                        >
+                            <ChevronLeft size={16} />
+                        </button>
+                        <span className="text-sm font-medium text-gray-700 min-w-[80px] text-center">
+                            Page {currentPage} of {Math.max(1, totalPages)}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            disabled={currentPage === totalPages || totalPages === 0}
+                            className="p-2 border border-gray-200 rounded-lg disabled:opacity-50 hover:bg-gray-50 text-gray-600 transition-colors disabled:cursor-not-allowed"
+                        >
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // Main Admin Page Component
 export default function AdminPage() {
     const navigate = useNavigate();
@@ -1762,6 +1935,7 @@ export default function AdminPage() {
     const [activeTab, setActiveTab] = useState('dashboard');
     const [logs, setLogs] = useState([]);
     const [auditLogs, setAuditLogs] = useState([]);
+    const [emailLogs, setEmailLogs] = useState([]);
     const [bots, setBots] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [spocs, setSpocs] = useState([]);
@@ -1795,7 +1969,7 @@ export default function AdminPage() {
                 await fetchAllData();
             } catch (error) {
                 console.error('Sync failed:', error);
-                alert('Sync failed: ' + (error.response?.data?.message || error.message));
+                alert('Sync failed: ' + (error.response?.data?.detail || error.response?.data?.message || error.message));
             } finally {
                 setSyncing(false);
             }
@@ -1820,9 +1994,10 @@ export default function AdminPage() {
     const fetchAllData = async () => {
         setLoading(true);
         try {
-            const [logsRes, auditRes, botsRes, deptsRes, spocsRes, usersRes, statsRes] = await Promise.all([
+            const [logsRes, auditRes, emailRes, botsRes, deptsRes, spocsRes, usersRes, statsRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/admin/logs`),
                 axios.get(`${API_BASE_URL}/admin/audit-logs`).catch(() => ({ data: [] })),
+                axios.get(`${API_BASE_URL}/admin/email-logs`).catch(() => ({ data: [] })),
                 axios.get(`${API_BASE_URL}/bots`),
                 axios.get(`${API_BASE_URL}/departments`),
                 axios.get(`${API_BASE_URL}/admin/spocs`).catch(() => ({ data: [] })),
@@ -1832,6 +2007,7 @@ export default function AdminPage() {
 
             setLogs(logsRes.data);
             setAuditLogs(auditRes.data);
+            setEmailLogs(emailRes.data);
             setBots(botsRes.data);
             setDepartments(deptsRes.data);
             setSpocs(spocsRes.data);
@@ -1916,6 +2092,13 @@ export default function AdminPage() {
                         count={logs.length}
                     />
                     <TabButton
+                        active={activeTab === 'emails'}
+                        onClick={() => { setActiveTab('emails'); setSidebarOpen(false); }}
+                        icon={Mail}
+                        label="Email Reports"
+                        count={emailLogs.filter(l => l.status === 'Failed').length || undefined}
+                    />
+                    <TabButton
                         active={activeTab === 'upload'}
                         onClick={() => { setActiveTab('upload'); setSidebarOpen(false); }}
                         icon={Upload}
@@ -1996,6 +2179,7 @@ export default function AdminPage() {
                             )}
                             {activeTab === 'logs' && <FileLogsSection logs={logs} onRefresh={fetchAllData} />}
                             {activeTab === 'audit' && <ActivityLogsSection auditLogs={auditLogs} onRefresh={fetchAllData} />}
+                            {activeTab === 'emails' && <EmailReportsSection emailLogs={emailLogs} onRefresh={fetchAllData} />}
                             {activeTab === 'upload' && <FileUploadSection onRefresh={fetchAllData} />}
                             {activeTab === 'users' && <UsersSection users={users} onRefresh={fetchAllData} />}
                             {activeTab === 'manual' && <UserManualSection />}
