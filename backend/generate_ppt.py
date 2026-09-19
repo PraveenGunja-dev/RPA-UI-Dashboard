@@ -48,20 +48,20 @@ def generate_deck(days=7):
     cutoff_date = (latest_date - datetime.timedelta(days=days)).strftime('%Y-%m-%d')
     
     # 1. High-level KPIs
-    total_bots = get_df("SELECT COUNT(*) as c FROM bots WHERE status != 'Inactive'")['c'][0]
-    runs_df = get_df(f"SELECT COUNT(*) as c, SUM(CASE WHEN run_status='Completed' THEN 1 ELSE 0 END) as s FROM bot_runs WHERE report_date >= '{cutoff_date}'")
+    total_bots = get_df("SELECT COUNT(*) as c FROM bots WHERE LOWER(REPLACE(COALESCE(status, ''), ' ', '')) NOT LIKE '%inactive%'")['c'][0]
+    runs_df = get_df(f"SELECT COUNT(*) as c, SUM(CASE WHEN LOWER(run_status) LIKE 'complete%' THEN 1 ELSE 0 END) as s FROM bot_runs WHERE report_date >= '{cutoff_date}'")
     total_runs = runs_df['c'][0] or 0
     successful_runs = runs_df['s'][0] or 0
     success_rate = f"{(successful_runs / total_runs * 100):.1f}%" if total_runs > 0 else "0%"
-    hours_df = get_df(f"SELECT SUM(b.per_day_saving_hours) as h FROM bot_runs r JOIN bots b ON r.bot_id = b.id WHERE r.run_status='Completed' AND r.report_date >= '{cutoff_date}'")
+    hours_df = get_df(f"SELECT SUM(b.per_day_saving_hours) as h FROM bot_runs r JOIN bots b ON r.bot_id = b.id WHERE LOWER(r.run_status) LIKE 'complete%' AND r.report_date >= '{cutoff_date}'")
     total_hours_saved = round(hours_df['h'][0] or 0)
     
     # 2. Dept Data
     dept_df = get_df(f"""
         SELECT d.name as department, 
                COUNT(r.id) as runs, 
-               SUM(CASE WHEN r.run_status='Completed' THEN 1 ELSE 0 END) as successful_runs,
-               SUM(CASE WHEN r.run_status='Completed' THEN b.per_day_saving_hours ELSE 0 END) as hours
+               SUM(CASE WHEN LOWER(r.run_status) LIKE 'complete%' THEN 1 ELSE 0 END) as successful_runs,
+               SUM(CASE WHEN LOWER(r.run_status) LIKE 'complete%' THEN b.per_day_saving_hours ELSE 0 END) as hours
         FROM bot_runs r JOIN bots b ON r.bot_id = b.id JOIN departments d ON b.department_id = d.id 
         WHERE r.report_date >= '{cutoff_date}' GROUP BY d.name ORDER BY hours DESC LIMIT 6
     """)
@@ -73,7 +73,7 @@ def generate_deck(days=7):
     top_bots_df = get_df(f"""
         SELECT b.bot_name, SUM(b.per_day_saving_hours) as hours
         FROM bot_runs r JOIN bots b ON r.bot_id = b.id
-        WHERE r.run_status='Completed' AND r.report_date >= '{cutoff_date}'
+        WHERE LOWER(r.run_status) LIKE 'complete%' AND r.report_date >= '{cutoff_date}'
         GROUP BY b.bot_name ORDER BY hours DESC LIMIT 5
     """)
     
@@ -281,7 +281,7 @@ def generate_deck(days=7):
         fail_df = get_df(f"""
             SELECT b.bot_name, d.name as dept, COUNT(*) as failed_runs
             FROM bot_runs r JOIN bots b ON r.bot_id = b.id JOIN departments d ON b.department_id = d.id
-            WHERE r.run_status != 'Completed' AND r.report_date >= '{cutoff_date}'
+            WHERE LOWER(r.run_status) NOT LIKE 'complete%' AND r.report_date >= '{cutoff_date}'
             GROUP BY b.bot_name ORDER BY failed_runs DESC LIMIT 5
         """)
         s_fail = prs.slides.add_slide(layout)
