@@ -14,6 +14,31 @@ ADMIN_EMAILS = os.getenv("ADMIN_EMAILS", "").split(",")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "https://aegis.adani.com/cobot")
 EMAIL_FROM = os.getenv("EMAIL_FROM", SMTP_USERNAME)
 
+
+def resolve_recipients(to_emails, cc_emails=None):
+    """
+    Testing switch: when TEST_EMAIL_OVERRIDE is set in .env, every outgoing
+    email (all send_* functions below) is redirected to that one address
+    instead of the real admins / SPOCs / users, so nobody else receives
+    anything while the pipeline is being tested. The email content (subject,
+    body, attachment, failed-bots table, etc.) is unchanged - only the
+    envelope To/Cc are replaced - so what lands in the test inbox is exactly
+    what would otherwise have gone to real recipients.
+
+    Remove TEST_EMAIL_OVERRIDE from .env to resume sending to real
+    admins/users.
+    """
+    cc_emails = list(cc_emails or [])
+    to_emails = list(to_emails or [])
+    override = os.getenv("TEST_EMAIL_OVERRIDE", "").strip()
+    if not override:
+        return to_emails, cc_emails
+    if to_emails or cc_emails:
+        print(f"MAIL TEST MODE: redirecting To={to_emails} Cc={cc_emails} -> {override} "
+              f"(unset TEST_EMAIL_OVERRIDE in .env to send to real recipients)")
+    return [override], []
+
+
 def send_admin_notification(new_user_email, new_user_name):
     """
     Sends an email notification to admins when a new user signs in for the first time.
@@ -21,10 +46,11 @@ def send_admin_notification(new_user_email, new_user_name):
     if not ADMIN_EMAILS or not ADMIN_EMAILS[0]:
         print("MAIL ERROR: No admin emails configured.")
         return False
+    admin_emails, _ = resolve_recipients(ADMIN_EMAILS)
 
     msg = MIMEMultipart()
     msg['From'] = EMAIL_FROM
-    msg['To'] = ", ".join(ADMIN_EMAILS)
+    msg['To'] = ", ".join(admin_emails)
     msg['Subject'] = f"🔔 New User Alert: {new_user_name} has joined Co-Bot Console"
 
     # Professional HTML Body
@@ -85,6 +111,7 @@ def send_new_bot_notification(admin_emails, bot, department_name, spoc_name, spo
     if not admin_emails:
         print("MAIL ERROR: No admin emails provided for new bot notification.")
         return False
+    admin_emails, _ = resolve_recipients(admin_emails)
 
     msg = MIMEMultipart()
     msg['From'] = EMAIL_FROM
@@ -191,6 +218,7 @@ def send_weekly_summary_notification(admin_emails, active_count, new_count, inac
     if not admin_emails:
         print("MAIL ERROR: No admin emails provided for weekly summary.")
         return False
+    admin_emails, _ = resolve_recipients(admin_emails)
 
     msg = MIMEMultipart()
     msg['From'] = EMAIL_FROM
@@ -263,6 +291,7 @@ def send_missing_data_notification(admin_emails, missing_dates, last_data_date):
     if not admin_emails:
         print("MAIL ERROR: No admin emails provided for missing data notification.")
         return False
+    admin_emails, _ = resolve_recipients(admin_emails)
 
     missing_count = len(missing_dates)
     missing_dates_str = ", ".join(missing_dates)
@@ -352,6 +381,7 @@ def send_performance_report_notification(admin_emails, stats, report_type, perio
     if not admin_emails:
         print("MAIL ERROR: No admin emails provided for performance report.")
         return False
+    admin_emails, _ = resolve_recipients(admin_emails)
 
     import urllib.parse
     import json
@@ -521,6 +551,7 @@ def send_bot_status_report_notification(to_emails, cc_emails, summary, attachmen
     subject = f"CoBot {title}"
     if not to_emails and not cc_emails:
         return False, "No recipients", subject
+    to_emails, cc_emails = resolve_recipients(to_emails, cc_emails)
 
     total = summary.get("total_runs", 0)
     status_counts = summary.get("status_counts", {})

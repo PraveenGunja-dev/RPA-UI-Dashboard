@@ -13,7 +13,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from mail_util import send_bot_status_report_notification
+from mail_util import send_bot_status_report_notification, resolve_recipients
 from models import EmailLog, RegisteredUser
 from services.bot_status_report import summarize_report
 from services.excel_parser import _build_bot_matcher
@@ -90,8 +90,12 @@ def send_report_email(db: Session, report_name: str, file_path: str,
         ok, error, subject = send_bot_status_report_notification(
             to, cc, summary, abs_path, attachment_name=report_name)
         log.subject = subject
-        log.recipients = ", ".join(to)
-        log.cc = ", ".join(cc)
+        # TEST_EMAIL_OVERRIDE (mail_util.resolve_recipients) may have redirected
+        # the actual send elsewhere; log what was really sent, not the
+        # real admin/SPOC list, so Admin > Email Reports isn't misleading.
+        actual_to, actual_cc = resolve_recipients(to, cc)
+        log.recipients = ", ".join(actual_to)
+        log.cc = ", ".join(actual_cc)
         log.status = "Sent" if ok else "Failed"
         log.error_message = error
     except Exception as e:
