@@ -67,10 +67,10 @@ if not "%ENV_TAG%"=="" (
     echo names ^(Adani_RPA_AA_Sync_Morning etc^) that could belong to it.
     echo Check schtasks /query /tn "Adani_RPA_*" yourself before disabling any.
 ) else (
-    :: These Task Scheduler jobs are replaced by the service. Disable them (not
-    :: delete) so nothing runs twice. On the AA PC the weekly / monthly / missing
-    :: data jobs must not run at all: they read that PC's copy of the database,
-    :: not the server's.
+    REM These Task Scheduler jobs are replaced by the service. Disable them
+    REM so nothing runs twice. On the AA PC the weekly / monthly / missing
+    REM data jobs must not run at all - they read that PC's copy of the
+    REM database, not the server's.
     for %%T in (Adani_RPA_AA_Sync_Morning Adani_RPA_AA_Sync_Evening Adani_RPA_Weekly_Report Adani_RPA_Monthly_Report Adani_RPA_Missing_Data_Check) do (
         schtasks /query /tn "%%T" >nul 2>&1 && (
             schtasks /change /tn "%%T" /disable >nul && echo Disabled old scheduled task %%T
