@@ -50,6 +50,34 @@ def get_display_status(status: str) -> str:
         
     return status.title()
 
+def _effective_frequency(bot) -> float:
+    """
+    How many times a month a bot is expected to run. An explicit numeric
+    Frequency in the master data always wins; otherwise it's guessed from
+    Schedule (Daily -> 30, Weekly/day of the week -> 4, Monthly/date of
+    month -> 1, unknown/blank -> 30).
+
+    A blank Frequency must NOT default to 1: for a Daily bot that divides
+    hours_saved_monthly by 1 instead of ~30, crediting a single run with an
+    entire month's hours (see calculate_realized_savings).
+    """
+    try:
+        frequency = float(bot.frequency) if bot.frequency else None
+        if frequency is not None and frequency <= 0:
+            frequency = None
+    except (ValueError, TypeError):
+        frequency = None
+    if frequency is not None:
+        return frequency
+
+    schedule = (bot.schedule or "").lower()
+    if 'week' in schedule:   # 'Weekly', 'day of the week'
+        return 4.0
+    if 'month' in schedule:  # 'Monthly', 'Date of month'
+        return 1.0
+    return 30.0  # 'Daily', unknown or blank schedule
+
+
 def get_per_run_value(bot) -> float:
     """
     Determine the 'Hours Optimization per run' for a bot.
@@ -68,22 +96,7 @@ def get_per_run_value(bot) -> float:
     if monthly <= 0:
         return 0.0
         
-    freq_str = (bot.frequency or "").lower()
-    divisor = 30.0 # Default Daily
-    
-    if 'weekly' in freq_str:
-        divisor = 4.0
-    elif 'monthly' in freq_str:
-        divisor = 1.0
-    elif 'daily' in freq_str:
-        divisor = 30.0
-    elif 'demand' in freq_str:
-        # For On Demand, if we lack per_run, we assume Monthly is an aggregate estimate?
-        # Or implies 1 run? Hard to guess.
-        # Let's assume standard Daily divisor if unknown, to be safe.
-        divisor = 30.0 
-        
-    return monthly / divisor if divisor else 0.0
+    return monthly / _effective_frequency(bot)
 
 def calculate_realized_savings(bot, report_date: str, runs_count: int = 1) -> float:
     """
@@ -96,26 +109,16 @@ def calculate_realized_savings(bot, report_date: str, runs_count: int = 1) -> fl
     monthly_hours = bot.hours_saved_monthly or 0
     per_day_hours = bot.per_day_saving_hours or 0
     schedule = (bot.schedule or "").lower().strip()
-    
-    # Get frequency as number (default to 1 if not set or invalid)
-    try:
-        frequency = float(bot.frequency) if bot.frequency else 1
-        if frequency <= 0:
-            frequency = 1
-    except (ValueError, TypeError):
-        frequency = 1
-    
+
     # Case 1: On Demand or Multiple Time in a Day -> use per_day_saving_hours * runs
     if 'on demand' in schedule or 'multiple' in schedule:
         return per_day_hours * runs_count
-    
-    # Case 2: All other schedules -> (monthly / frequency) * runs_count
-    # Calculate value per run
-    if frequency > 0:
-        value_per_run = monthly_hours / frequency
-    else:
-        value_per_run = 0
-        
+
+    # Case 2: All other schedules -> (monthly / frequency) * runs_count.
+    # A blank Frequency falls back to a schedule-based guess (_effective_frequency),
+    # not 1 - dividing by 1 would credit a Daily bot's entire month of hours
+    # to a single run.
+    value_per_run = monthly_hours / _effective_frequency(bot)
     return value_per_run * runs_count
 
 def calculate_fte_savings(

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from database import get_db
 from models import Bot, BotRun
 from schemas import BotListItem, BotDetail
-from utils import get_display_status, calculate_fte_savings, calculate_realized_savings
+from utils import get_display_status, calculate_fte_savings, calculate_realized_savings, _effective_frequency
 
 router = APIRouter(prefix="/api", tags=["bots"])
 
@@ -245,10 +245,10 @@ def get_bot_detail(bot_id: int, db: Session = Depends(get_db)):
     monthly_hours = bot.hours_saved_monthly or 0
     per_day_hours = bot.per_day_saving_hours or 0
     schedule = (bot.schedule or "").lower().strip()
-    try:
-        freq = float(bot.frequency) if bot.frequency and float(bot.frequency) > 0 else 1.0
-    except (ValueError, TypeError):
-        freq = 1.0
+    # A blank Frequency must fall back to a schedule-based guess, not 1 -
+    # see utils._effective_frequency (dividing by 1 credits an entire
+    # month's hours to a single run for a Daily-scheduled bot).
+    freq = _effective_frequency(bot)
 
     value_per_run = 0.0
     is_on_demand = 'on demand' in schedule or 'multiple' in schedule
