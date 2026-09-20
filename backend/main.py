@@ -40,17 +40,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Middleware to handle /cobot subpath and basic logging
+# Subpath this app is served under: /cobot, /cobot-testing, ...
+def _base_prefixes():
+    from urllib.parse import urlparse
+    prefixes = set()
+    for value in (os.getenv("FRONTEND_BASE_URL", "/cobot/"), os.getenv("APP_BASE_URL", "")):
+        path = urlparse(value).path.strip("/") if value else ""
+        if path:
+            prefixes.add(path)
+    return prefixes
+
+
+BASE_PREFIXES = _base_prefixes()
+print(f"MAIN STARTUP: serving under prefixes: {sorted(BASE_PREFIXES) or ['/']}")
+
+
+# Middleware to handle the /cobot (or /cobot-testing) subpath and basic logging
 @app.middleware("http")
 async def subpath_middleware(request: Request, call_next):
     try:
         # Debug print the incoming request path
         print(f"DEBUG: Incoming request path: {request.url.path}")
-        
-        # Rewrite /cobot/api requests to /api so they match routers
-        if request.url.path.startswith("/cobot/api"):
-            request.scope["path"] = request.url.path.replace("/cobot/api", "/api", 1)
-            print(f"DEBUG: Rewritten path: {request.scope['path']}")
+
+        # Rewrite /<prefix>/api requests to /api so they match routers
+        # (when Nginx passes the prefix through)
+        for prefix in BASE_PREFIXES:
+            if request.url.path.startswith(f"/{prefix}/api"):
+                request.scope["path"] = request.url.path.replace(f"/{prefix}/api", "/api", 1)
+                print(f"DEBUG: Rewritten path: {request.scope['path']}")
+                break
             
         response = await call_next(request)
         return response
